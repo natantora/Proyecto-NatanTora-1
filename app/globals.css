@@ -1,0 +1,392 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   DESIGN TOKENS — Midrash Natán Torá
+   Editorial · Restrained · Reverent
+   ============================================================ */
+
+:root {
+  /* Color */
+  --navy: #1b2a4e;
+  --navy-deep: #0f1a30;
+  --navy-soft: #2a3a60;
+  --cream: #f7f1e3;
+  --cream-light: #fbf7eb;
+  --cream-dark: #efe6cf;
+  --gold: #b8924a;
+  --gold-light: #d4b576;
+  --gold-deep: #8f6f37;
+  --ink: #2c2416;
+  --ink-soft: #5c4f3a;
+  --ink-muted: #8b7b5c;
+  --line: #d9cdb0;
+  --line-soft: #e8dfc7;
+
+  /* Motion — considered easing curves */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-cubic: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-quick: 180ms;
+  --dur-base: 280ms;
+  --dur-slow: 480ms;
+  --dur-page: 600ms;
+}
+
+/* ============================================================
+   View Transitions — SPA-feel navigation, native browser API
+   ============================================================ */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-page);
+  animation-timing-function: var(--ease-out-expo);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  font-weight: 500;
+  line-height: 1.65;
+  font-feature-settings: "kern", "liga", "calt";
+}
+
+::selection {
+  background: var(--gold);
+  color: var(--navy-deep);
+}
+
+/* ============================================================
+   Typography utilities
+   ============================================================ */
+.font-hebrew {
+  font-family: var(--font-hebrew), serif;
+}
+.font-serif {
+  font-family: var(--font-serif), Georgia, serif;
+  font-feature-settings: "kern", "liga", "dlig", "calt";
+}
+
+/* Sans display (uppercase, modern) — existing */
+.display-xl {
+  font-weight: 700;
+  font-size: clamp(38px, 6vw, 72px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+.display-lg {
+  font-weight: 700;
+  font-size: clamp(30px, 5vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+.display-md {
+  font-weight: 700;
+  font-size: clamp(24px, 4vw, 38px);
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+/* Serif display — editorial, mixed case, optical */
+.serif-hero {
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(48px, 8vw, 108px);
+  line-height: 1;
+  letter-spacing: -0.015em;
+}
+.serif-hero em,
+.serif-hero .italic {
+  font-style: italic;
+  font-weight: 400;
+}
+.serif-display {
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(36px, 5.5vw, 64px);
+  line-height: 1.05;
+  letter-spacing: -0.012em;
+}
+.serif-display em {
+  font-style: italic;
+}
+.serif-lead {
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(20px, 2.2vw, 28px);
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--ink-soft);
+}
+.serif-lead em {
+  font-style: italic;
+  color: var(--navy);
+}
+
+/* Drop cap — for editorial paragraphs */
+.dropcap::first-letter {
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 500;
+  float: left;
+  font-size: 4.2em;
+  line-height: 0.85;
+  padding: 0.05em 0.12em 0 0;
+  color: var(--gold-deep);
+}
+
+/* Eyebrow */
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.eyebrow-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+.eyebrow-line::before {
+  content: "";
+  width: 32px;
+  height: 1px;
+  background: var(--gold);
+}
+
+.accent {
+  color: var(--gold);
+  font-weight: 700;
+}
+.accent-light {
+  color: var(--gold-light);
+  font-weight: 700;
+}
+.serif-hero .accent,
+.serif-hero .accent-light,
+.serif-display .accent {
+  font-weight: 400;
+  font-style: italic;
+}
+
+/* ============================================================
+   Buttons — with micro-interactions
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-decoration: none;
+  font-weight: 700;
+  transition: background-color var(--dur-base) var(--ease-out-quart),
+    color var(--dur-base) var(--ease-out-quart),
+    border-color var(--dur-base) var(--ease-out-quart),
+    transform var(--dur-quick) var(--ease-out-quart);
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  position: relative;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn-primary {
+  background: var(--gold);
+  color: var(--navy-deep);
+}
+.btn-primary:hover {
+  background: var(--gold-light);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--cream);
+  border: 1px solid rgba(247, 241, 227, 0.4);
+}
+.btn-ghost:hover {
+  border-color: var(--gold-light);
+  color: var(--gold-light);
+}
+.btn-dark {
+  background: var(--navy);
+  color: var(--cream);
+}
+.btn-dark:hover {
+  background: var(--navy-deep);
+  color: var(--gold-light);
+}
+
+/* Link with gold underline that grows on hover */
+.link-gold {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--navy);
+  text-decoration: none;
+  font-weight: 700;
+  display: inline-block;
+  position: relative;
+  padding-bottom: 6px;
+  transition: color var(--dur-base) var(--ease-out-quart);
+}
+.link-gold::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 1px;
+  width: 100%;
+  background: var(--gold);
+  transition: width var(--dur-slow) var(--ease-out-expo);
+  transform-origin: left;
+}
+.link-gold:hover {
+  color: var(--gold);
+}
+.link-gold:hover::after {
+  background: var(--gold-light);
+}
+
+/* ============================================================
+   Editorial elements
+   ============================================================ */
+.pullquote {
+  font-family: var(--font-serif), Georgia, serif;
+  font-style: italic;
+  font-size: clamp(20px, 2.2vw, 26px);
+  font-weight: 400;
+  color: var(--navy);
+  border-left: 2px solid var(--gold);
+  padding-left: 26px;
+  margin: 40px 0;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+}
+
+/* Hairline rule — small ornamental divider */
+.hairline {
+  display: inline-block;
+  width: 48px;
+  height: 1px;
+  background: var(--gold);
+  vertical-align: middle;
+}
+.hairline-vertical {
+  display: inline-block;
+  width: 1px;
+  height: 48px;
+  background: var(--gold);
+}
+
+/* Paper texture — very subtle */
+.texture-paper {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.722 0 0 0 0 0.573 0 0 0 0 0.290 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ============================================================
+   Scroll-driven reveals — native CSS, falls back gracefully
+   ============================================================ */
+@keyframes revealUp {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: revealUp linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 25%;
+  }
+  .reveal-delay-1 {
+    animation-range: entry 8% cover 32%;
+  }
+  .reveal-delay-2 {
+    animation-range: entry 16% cover 40%;
+  }
+  .reveal-delay-3 {
+    animation-range: entry 24% cover 48%;
+  }
+}
+
+@supports not (animation-timeline: view()) {
+  .reveal {
+    animation: revealUp var(--dur-slow) var(--ease-out-expo) both;
+  }
+}
+
+.fade-in {
+  animation: revealUp var(--dur-slow) var(--ease-out-expo) both;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   Form inputs — consistent craft
+   ============================================================ */
+.input {
+  width: 100%;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid var(--line);
+  font-size: 15px;
+  color: var(--navy);
+  font-family: inherit;
+  outline: none;
+  transition: border-color var(--dur-base) var(--ease-out-quart);
+}
+.input:focus {
+  border-color: var(--gold);
+}
+
+.card {
+  background: var(--cream-light);
+  border: 1px solid var(--line);
+  padding: 32px;
+}
+
+/* ============================================================
+   Focus visible — accessible, gold ring
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
