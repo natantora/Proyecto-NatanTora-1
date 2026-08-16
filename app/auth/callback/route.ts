@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/auth/login?error=callback`);
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error: exchangeError, data } =
     await supabase.auth.exchangeCodeForSession(code);
 

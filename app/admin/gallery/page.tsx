@@ -9,7 +9,7 @@ import GallerySetup from "./GallerySetup";
 export const dynamic = "force-dynamic";
 
 export default async function AdminGalleryPage() {
-  const sb = createClient();
+  const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) redirect("/auth/login?next=/admin/gallery");
   const role = (await getUserRole(user.id)) as Role;

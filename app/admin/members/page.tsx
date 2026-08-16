@@ -8,7 +8,7 @@ import RolePermissionsMatrix from "@/components/admin/RolePermissionsMatrix";
 export const dynamic = "force-dynamic";
 
 export default async function AdminMembersPage() {
-  const sb = createClient();
+  const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) redirect("/auth/login?next=/admin/members");
 

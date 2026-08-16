@@ -7,7 +7,7 @@ import PendingReviewList from "./PendingReviewList";
 export const dynamic = "force-dynamic";
 
 export default async function PendingReviewPage() {
-  const sb = createClient();
+  const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) redirect("/auth/login?next=/admin/classes/pending");
   const role = (await getUserRole(user.id)) as Role;

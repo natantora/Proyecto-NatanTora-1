@@ -3,7 +3,7 @@ import { canAccessAdminPanel, type Role } from "@/lib/permissions";
 import HeaderClient from "./HeaderClient";
 
 export default async function SiteHeader() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

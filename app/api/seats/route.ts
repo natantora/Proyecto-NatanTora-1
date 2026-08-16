@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 
-function isAdmin() { return cookies().get("admin_auth")?.value === "ok"; }
+async function isAdmin() { return (await cookies()).get("admin_auth")?.value === "ok"; }
 
 export async function PATCH(req: NextRequest) {
-  if (!isAdmin()) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  if (!(await isAdmin())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const { id, status, holder_name, holder_email, holder_phone } = await req.json().catch(() => ({}));
   if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 });
   const updates: Record<string, unknown> = {};

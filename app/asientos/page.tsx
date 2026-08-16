@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AsientosPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const now = new Date().toISOString();
 
   // Buscar holiday actualmente abierto (is_open=true y dentro de la ventana)
