@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/data/server";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);

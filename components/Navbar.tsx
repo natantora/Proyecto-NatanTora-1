@@ -2,7 +2,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 
 const links = [
   { href: '/horarios', label: 'Horarios' },
@@ -23,19 +22,15 @@ export default function Navbar() {
     const onScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', onScroll);
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setUser(data.user);
-        supabase.from('profiles').select('*').eq('id', data.user.id).single()
-          .then(({ data: p }) => setProfile(p));
-      }
-    });
+    fetch('/api/auth/me').then((res) => res.json()).then((data) => {
+      if (data.user) { setUser(data.user); setProfile(data.user); }
+    }).catch(() => undefined);
 
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await fetch('/api/admin/logout', { method: 'POST' });
     setUser(null);
     setProfile(null);
     window.location.href = '/';

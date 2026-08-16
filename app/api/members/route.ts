@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/data/server";
 import { isUserAdmin } from "@/lib/admin-bootstrap";
 
 export async function PATCH(req: NextRequest) {

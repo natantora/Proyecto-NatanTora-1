@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Calendar, Bell } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/data/server";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;

@@ -1,6 +1,6 @@
 /**
  * Constantes para el sistema de medios de clases.
- * Los videos/audios se suben directo a Supabase Storage (bucket "class-media")
+ * Los videos/audios se suben directo al Storage Bucket privado de Railway.
  * para evitar las limitaciones de embed de YouTube.
  */
 
@@ -31,10 +31,10 @@ export const ALLOWED_AUDIO_TYPES = [
 export const ALL_MEDIA_TYPES = [...ALLOWED_VIDEO_TYPES, ...ALLOWED_AUDIO_TYPES];
 
 /**
- * Detecta si una URL es de nuestro Supabase Storage (no YouTube/Vimeo)
+ * Detecta si una URL es de nuestro almacenamiento (no YouTube/Vimeo)
  * Si lo es, el reproductor nativo HTML5 puede usarla directo.
  */
 export function isStorageUrl(url: string): boolean {
   if (!url) return false;
-  return /supabase\.co\/storage\/v1\/object\/public\//.test(url);
+  return url.startsWith("/api/media?key=");
 }

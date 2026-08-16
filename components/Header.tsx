@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/data/server";
 import { canAccessAdminPanel, type Role } from "@/lib/permissions";
 import HeaderClient from "./HeaderClient";
 

@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/data/server";
 import EventsAdmin from "./EventsAdmin";
 
 export const dynamic = "force-dynamic";

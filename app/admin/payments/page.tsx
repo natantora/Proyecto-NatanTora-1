@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/data/server";
 import { formatMXN, cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";

@@ -1,6 +1,6 @@
-import { createServerClient, type SetAllCookies } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { canAccessAdminPanel, type Role } from "@/lib/permissions";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
 const PUBLIC_PATHS = new Set([
   "/",
@@ -21,82 +21,44 @@ function isPublic(pathname: string): boolean {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
 
   // /admin/* requiere acceso al panel (rabino, editor, admin u owner)
   if (pathname.startsWith("/admin")) {
-    if (!user) {
+    if (!session) {
       const url = request.nextUrl.clone();
       url.pathname = "/auth/login";
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, status")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (!canAccessAdminPanel(profile?.role as Role | null | undefined)) {
+    if (session.status !== "approved" || !canAccessAdminPanel(session.role as Role)) {
       const url = request.nextUrl.clone();
       url.pathname = "/";
       url.searchParams.set("error", "admin_only");
       return NextResponse.redirect(url);
     }
-    return supabaseResponse;
+    return NextResponse.next();
   }
 
   if (isPublic(pathname)) {
-    return supabaseResponse;
+    return NextResponse.next();
   }
 
   // Resto de rutas: requieren miembro aprobado
-  if (!user) {
+  if (!session) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("status")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profile?.status !== "approved") {
+  if (session.status !== "approved") {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/pendiente";
     return NextResponse.redirect(url);
   }
 
-  return supabaseResponse;
+  return NextResponse.next();
 }
 
 export const config = {

@@ -1,11 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { cookies } from "next/headers";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/data/server";
+import { getCurrentUser } from "@/lib/auth";
+import { canEditEvents, type Role } from "@/lib/permissions";
 
-async function isAdmin() { return (await cookies()).get("admin_auth")?.value === "ok"; }
+async function isAuthorized() {
+  const user = await getCurrentUser();
+  return !!user && user.status === "approved" && canEditEvents(user.role as Role);
+}
 
 export async function POST(req: NextRequest) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  if (!(await isAuthorized())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const body = await req.json().catch(() => ({}));
   const supabase = createAdminClient();
   const payload = {
@@ -18,7 +22,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  if (!(await isAuthorized())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const { id, ...updates } = await req.json().catch(() => ({}));
   if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 });
   const supabase = createAdminClient();
@@ -28,7 +32,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  if (!(await isAuthorized())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const { id } = await req.json().catch(() => ({}));
   if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 });
   const supabase = createAdminClient();

@@ -1,5 +1,5 @@
 import BibliotecaClient from './BibliotecaClient'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/data/server'
 
 export const metadata = {
   title: 'Biblioteca de Clases — Midrash Natán Torá',

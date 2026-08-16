@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/data/server";
 import { canAccessAdminPanel, type Role } from "@/lib/permissions";
 
 /**

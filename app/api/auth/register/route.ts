@@ -1,58 +1,48 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
-import { bootstrapAdminIfFirstUser } from "@/lib/admin-bootstrap";
+import { hash } from "bcryptjs";
+import { transaction } from "@/lib/db";
 import { notifyAdminsOfPending } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  if (!body?.email || !body?.password || !body?.full_name) {
-    return NextResponse.json({ error: "Campos incompletos" }, { status: 400 });
+  const email = String(body?.email ?? "").trim().toLowerCase();
+  const password = String(body?.password ?? "");
+  const fullName = String(body?.full_name ?? "").trim();
+  const phone = String(body?.phone ?? "").trim();
+
+  if (!email || !fullName || password.length < 8) {
+    return NextResponse.json(
+      { error: "Completa los campos; la contraseña debe tener al menos 8 caracteres." },
+      { status: 400 },
+    );
   }
 
-  const supabase = createAdminClient();
-
-  const { data: userData, error: authError } =
-    await supabase.auth.admin.createUser({
-      email: body.email,
-      password: body.password,
-      email_confirm: false,
-      user_metadata: { full_name: body.full_name, phone: body.phone },
+  try {
+    const passwordHash = await hash(password, 12);
+    const initialOwner = (process.env.INITIAL_OWNER_EMAIL ?? "").trim().toLowerCase();
+    const user = await transaction(async (client) => {
+      const existing = await client.query("SELECT id FROM profiles WHERE email = $1", [email]);
+      if (existing.rowCount) throw new Error("EMAIL_EXISTS");
+      const count = await client.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM profiles");
+      const first = Number(count.rows[0]?.count ?? 0) === 0;
+      const owner = first && initialOwner !== "" && email === initialOwner;
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO profiles (full_name, email, phone, password_hash, status, role)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [fullName, email, phone || null, passwordHash, owner ? "approved" : "pending", owner ? "owner" : "member"],
+      );
+      return { id: inserted.rows[0].id, owner };
     });
 
-  if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 400 });
+    if (!user.owner) {
+      notifyAdminsOfPending({ userId: user.id, fullName, email, phone }).catch(console.error);
+    }
+    return NextResponse.json({ ok: true, owner: user.owner });
+  } catch (error: any) {
+    if (error?.message === "EMAIL_EXISTS" || error?.code === "23505") {
+      return NextResponse.json({ error: "Ese correo ya está registrado." }, { status: 409 });
+    }
+    console.error("[register]", error);
+    return NextResponse.json({ error: "No se pudo completar el registro." }, { status: 500 });
   }
-
-  const userId = userData.user.id;
-
-  const { error: profileError } = await supabase.from("profiles").upsert({
-    id: userId,
-    full_name: body.full_name,
-    email: body.email,
-    phone: body.phone,
-    status: "pending",
-    role: "member",
-  });
-
-  if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
-  }
-
-  // Bootstrap: si es el primer user, auto-promover a admin
-  const wasBootstrapped = await bootstrapAdminIfFirstUser(userId);
-
-  // Si fue bootstrap, también confirmamos el email automáticamente
-  if (wasBootstrapped) {
-    await supabase.auth.admin.updateUserById(userId, { email_confirm: true });
-  } else {
-    // Notificar admins existentes (fire-and-forget)
-    notifyAdminsOfPending({
-      userId,
-      fullName: body.full_name,
-      email: body.email,
-      phone: body.phone || "",
-    }).catch((e) => console.error("[register] notify failed:", e));
-  }
-
-  return NextResponse.json({ ok: true, bootstrapped: wasBootstrapped });
 }

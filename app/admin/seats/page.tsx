@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/data/server";
 import SeatsAdmin from "./SeatsAdmin";
 
 export const dynamic = "force-dynamic";

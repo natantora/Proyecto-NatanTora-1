@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient, createAdminClient } from "@/lib/supabase/server"
+import { createClient, createAdminClient } from "@/lib/data/server"
 import { getUserRole } from "@/lib/admin-bootstrap"
 import { canEditAllClasses, type Role } from "@/lib/permissions"
 

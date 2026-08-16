@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/data/server";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import { canCreateOwnClasses, type Role } from "@/lib/permissions";
 import {
-  CLASS_MEDIA_BUCKET,
   ALLOWED_VIDEO_TYPES,
   ALLOWED_AUDIO_TYPES,
 } from "@/lib/class-media";
+import { mediaUrl, signedUploadUrl } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +23,10 @@ function slugify(s: string): string {
 /**
  * POST /api/class-media/sign
  * Body JSON: { filename: string, contentType: string, kind: 'video' | 'audio' }
- * Retorna { signedUrl, token, path, publicUrl }
+ * Retorna { signedUrl, path, publicUrl }
  *
  * El cliente (browser) usa signedUrl + token para subir el archivo
- * DIRECTO a Supabase Storage (bypaseando el límite 4.5MB de Vercel).
+ * DIRECTO al Storage Bucket privado de Railway.
  */
 export async function POST(req: NextRequest) {
   const sb = await createClient();
@@ -66,28 +66,20 @@ export async function POST(req: NextRequest) {
   const slug = slugify(baseName) || (isVideo ? "video" : "audio");
   const timestamp = Date.now();
   const folder = isVideo ? "video" : "audio";
-  const path = `${folder}/${timestamp}-${slug}.${ext}`;
+  const path = `class-media/${folder}/${timestamp}-${slug}.${ext}`;
 
-  // Crear signed upload URL con service_role
-  const admin = createAdminClient();
-  const { data, error } = await admin.storage
-    .from(CLASS_MEDIA_BUCKET)
-    .createSignedUploadUrl(path);
-
-  if (error || !data) {
-    console.error("[api/class-media/sign] createSignedUploadUrl error:", error);
+  try {
+    const signedUrl = await signedUploadUrl(path, contentType);
     return NextResponse.json({
-      error: error?.message || "Error generando URL de subida"
+      ok: true,
+      signedUrl,
+      path,
+      publicUrl: mediaUrl(path),
+    });
+  } catch (error) {
+    console.error("[api/class-media/sign] signedUploadUrl error:", error);
+    return NextResponse.json({
+      error: "El almacenamiento de Railway aún no está configurado"
     }, { status: 500 });
   }
-
-  const { data: pub } = admin.storage.from(CLASS_MEDIA_BUCKET).getPublicUrl(path);
-
-  return NextResponse.json({
-    ok: true,
-    signedUrl: data.signedUrl,
-    token: data.token,
-    path: data.path,
-    publicUrl: pub.publicUrl,
-  });
 }

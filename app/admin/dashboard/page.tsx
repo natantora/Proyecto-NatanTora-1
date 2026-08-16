@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/data/server";
 import { Users, Armchair, BookOpen, HandCoins } from "lucide-react";
 import { formatMXN } from "@/lib/utils";
 
@@ -13,12 +13,12 @@ export default async function AdminDashboard() {
     supabase.from("payments").select("amount, status").eq("status", "paid"),
   ]);
   const totalMembers = members.count ?? 0;
-  const pendingMembers = members.data?.filter((m) => m.status === "pending").length ?? 0;
+  const pendingMembers = members.data?.filter((m: any) => m.status === "pending").length ?? 0;
   const totalSeats = seats.count ?? 0;
-  const takenSeats = seats.data?.filter((s) => s.status !== "available").length ?? 0;
-  const publishedClasses = classes.data?.filter((c) => c.published).length ?? 0;
+  const takenSeats = seats.data?.filter((s: any) => s.status !== "available").length ?? 0;
+  const publishedClasses = classes.data?.filter((c: any) => c.published).length ?? 0;
   const totalClasses = classes.count ?? 0;
-  const totalRevenue = payments.data?.reduce((sum, p) => sum + (p.amount ?? 0), 0) ?? 0;
+  const totalRevenue = payments.data?.reduce((sum: number, p: any) => sum + Number(p.amount ?? 0), 0) ?? 0;
   const cards = [
     { label: "Miembros", value: totalMembers, sub: `${pendingMembers} pendientes de aprobación`, icon: Users, color: "bg-midrash-100 text-midrash-800" },
     { label: "Asientos reservados", value: `${takenSeats} / ${totalSeats}`, sub: `${totalSeats - takenSeats} disponibles`, icon: Armchair, color: "bg-gold-100 text-gold-800" },
