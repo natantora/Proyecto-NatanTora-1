@@ -28,7 +28,7 @@ function slugify(s: string): string {
  * FormData: file (File), category (string), caption (string opcional)
  */
 export async function POST(req: NextRequest) {
-  const sb = createClient();
+  const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const role = (await getUserRole(user.id)) as Role | null;
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
  * Borra una foto + sus sidecars
  */
 export async function DELETE(req: NextRequest) {
-  const sb = createClient();
+  const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const role = (await getUserRole(user.id)) as Role | null;

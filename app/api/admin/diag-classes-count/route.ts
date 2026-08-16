@@ -9,7 +9,7 @@ import { canEditAllClasses, type Role } from "@/lib/permissions"
  * para confirmar si la DB tiene rows o no.
  */
 export async function GET() {
-  const sb = createClient()
+  const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: "no auth" }, { status: 401 })
   const role = (await getUserRole(user.id)) as Role | null

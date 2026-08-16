@@ -29,7 +29,7 @@ function slugify(s: string): string {
  * DIRECTO a Supabase Storage (bypaseando el límite 4.5MB de Vercel).
  */
 export async function POST(req: NextRequest) {
-  const sb = createClient();
+  const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const role = (await getUserRole(user.id)) as Role | null;

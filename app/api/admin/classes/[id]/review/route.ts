@@ -14,9 +14,10 @@ import { canReviewClasses, type Role } from "@/lib/permissions";
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = createClient();
+  const { id } = await params;
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -54,7 +55,7 @@ export async function POST(
           rejection_reason: reason.trim(),
         };
 
-  const { error } = await sb.from("classes").update(updates).eq("id", params.id);
+  const { error } = await sb.from("classes").update(updates).eq("id", id);
   if (error) {
     console.error("[api/admin/classes/[id]/review] failed:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

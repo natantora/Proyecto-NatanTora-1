@@ -14,7 +14,7 @@ import {
  * Si la migración no ha corrido, se inserta sin ellas y se loggea aviso.
  */
 export async function POST(req: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
  * PATCH /api/classes — editar clase
  */
 export async function PATCH(req: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -154,7 +154,7 @@ export async function PATCH(req: NextRequest) {
  * DELETE /api/classes?id=...
  */
 export async function DELETE(req: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 

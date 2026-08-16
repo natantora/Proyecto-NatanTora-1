@@ -3,9 +3,10 @@ import { consumeToken } from "@/lib/approval-tokens";
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
-  const result = await consumeToken(params.token);
+  const { token } = await params;
+  const result = await consumeToken(token);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
