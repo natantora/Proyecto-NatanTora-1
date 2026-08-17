@@ -3,7 +3,7 @@ import { query } from "@/lib/db";
 
 const TABLES = new Set([
   "profiles", "sessions", "seats", "classes", "events", "schedules",
-  "shabat_config", "payments", "seat_holidays", "approval_tokens",
+  "shabat_config", "payments", "seat_holidays", "approval_tokens", "oauth_accounts",
 ]);
 
 type Filter = { column: string; op: "=" | "IS" | ">=" | "IN"; value: unknown };

@@ -14,7 +14,13 @@ function LoginForm() {
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const next = params.get("from") ?? "/";
+  const next = params.get("next") ?? params.get("from") ?? "/";
+  const oauthError = params.get("oauth_error");
+  const oauthMessage = oauthError?.endsWith("_not_configured")
+    ? "Este proveedor todavía no tiene sus credenciales configuradas."
+    : oauthError
+      ? "No se pudo completar el acceso. Inténtalo nuevamente."
+      : null;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,11 +41,10 @@ function LoginForm() {
     router.refresh();
   }
 
-  async function onOAuth(provider: "google" | "apple") {
+  function onOAuth(provider: "google" | "apple") {
     setOauthLoading(provider);
-    const providerLabel = provider === "google" ? "Google" : "Apple";
-    setError(`El acceso con ${providerLabel} se habilitará después. Por ahora usa correo y contraseña.`);
-    setOauthLoading(null);
+    setError(null);
+    router.push(`/api/auth/oauth/${provider}?next=${encodeURIComponent(next)}`);
   }
 
   return (
@@ -145,9 +150,9 @@ function LoginForm() {
                 autoComplete="current-password"
               />
             </div>
-            {error && (
+            {(error || oauthMessage) && (
               <div className="bg-red-50 border border-red-200 px-4 py-3 text-[13px] text-red-800">
-                {error}
+                {error || oauthMessage}
               </div>
             )}
             <button

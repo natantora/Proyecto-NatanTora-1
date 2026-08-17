@@ -3,7 +3,7 @@ import { compare } from "bcryptjs";
 import { query } from "@/lib/db";
 import { createSession } from "@/lib/auth";
 
-type LoginRow = { id: string; password_hash: string; status: string };
+type LoginRow = { id: string; password_hash: string | null; status: string };
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     [email],
   );
   const user = result.rows[0];
-  if (!user || !(await compare(password, user.password_hash))) {
+  if (!user || !user.password_hash || !(await compare(password, user.password_hash))) {
     return NextResponse.json({ error: "Correo o contraseña incorrectos." }, { status: 401 });
   }
   if (user.status !== "approved") {
