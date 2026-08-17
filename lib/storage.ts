@@ -13,16 +13,16 @@ function value(...names: string[]): string {
   throw new Error(`Falta variable de almacenamiento: ${names[0]}`);
 }
 
-export function bucketName() { return value("BUCKET_NAME", "BUCKET"); }
+export function bucketName() { return value("AWS_S3_BUCKET_NAME", "BUCKET_NAME", "BUCKET"); }
 
 export function storageClient() {
   return new S3Client({
-    region: process.env.BUCKET_REGION ?? process.env.REGION ?? "auto",
-    endpoint: value("BUCKET_ENDPOINT", "ENDPOINT"),
+    region: process.env.AWS_DEFAULT_REGION ?? process.env.BUCKET_REGION ?? process.env.REGION ?? "auto",
+    endpoint: value("AWS_ENDPOINT_URL", "BUCKET_ENDPOINT", "ENDPOINT"),
     forcePathStyle: true,
     credentials: {
-      accessKeyId: value("BUCKET_ACCESS_KEY_ID", "ACCESS_KEY_ID"),
-      secretAccessKey: value("BUCKET_SECRET_ACCESS_KEY", "SECRET_ACCESS_KEY"),
+      accessKeyId: value("AWS_ACCESS_KEY_ID", "BUCKET_ACCESS_KEY_ID", "ACCESS_KEY_ID"),
+      secretAccessKey: value("AWS_SECRET_ACCESS_KEY", "BUCKET_SECRET_ACCESS_KEY", "SECRET_ACCESS_KEY"),
     },
   });
 }
