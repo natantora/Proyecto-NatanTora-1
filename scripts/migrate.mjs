@@ -36,6 +36,23 @@ try {
     }
   }
 
+  // Recuperación inicial: si solo existe una cuenta y todavía no hay ningún
+  // administrador, esa única cuenta es necesariamente la primera registrada.
+  // Esto resuelve el caso en que el correo propietario se configuró después.
+  const soleAccount = await client.query(
+    `UPDATE profiles
+        SET role = 'owner', status = 'approved', updated_at = NOW()
+      WHERE id = (SELECT id FROM profiles LIMIT 1)
+        AND (SELECT COUNT(*) FROM profiles) = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM profiles WHERE role IN ('admin', 'owner')
+        )
+      RETURNING id`,
+  );
+  if (soleAccount.rowCount) {
+    console.log("Primera y única cuenta promovida a propietaria");
+  }
+
   console.log("Base de datos NatanTora actualizada correctamente");
 } finally {
   await client.end();
