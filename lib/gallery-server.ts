@@ -1,65 +1,56 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/server";
 import {
-  BUCKET,
   CATEGORIES_LIST,
   type Photo,
   type GalleryState,
 } from "./gallery";
+import { getObjectText, listObjects, mediaUrl, storageReady } from "@/lib/storage";
 
 export async function bucketExists(): Promise<boolean> {
-  const admin = createAdminClient();
-  const { data, error } = await admin.storage.getBucket(BUCKET);
-  if (error) return false;
-  return !!data;
+  return storageReady();
 }
 
 export async function listPhotos(): Promise<Photo[]> {
-  const admin = createAdminClient();
   const all: Photo[] = [];
 
   for (const cat of CATEGORIES_LIST) {
-    const { data: files, error } = await admin.storage.from(BUCKET).list(cat, {
-      limit: 1000,
-      sortBy: { column: "created_at", order: "desc" },
-    });
-    if (error || !files) continue;
-
-    const photos = files.filter(
-      (f) => !f.name.endsWith(".caption.txt") && !f.name.endsWith(".uploader.txt")
-    );
+    const prefix = `gallery/${cat}/`;
+    const files = await listObjects(prefix);
+    const photos = files.filter((f) => f.Key && !f.Key.endsWith(".caption.txt") && !f.Key.endsWith(".uploader.txt"));
     const captionMap = new Map<string, string>();
     const uploaderMap = new Map<string, string>();
-    const captionFiles = files.filter((f) => f.name.endsWith(".caption.txt"));
-    const uploaderFiles = files.filter((f) => f.name.endsWith(".uploader.txt"));
+    const captionFiles = files.filter((f) => f.Key?.endsWith(".caption.txt"));
+    const uploaderFiles = files.filter((f) => f.Key?.endsWith(".uploader.txt"));
 
     await Promise.all([
       ...captionFiles.map(async (f) => {
-        const ts = f.name.split(".")[0];
-        const { data } = await admin.storage.from(BUCKET).download(`${cat}/${f.name}`);
-        if (data) captionMap.set(ts, await data.text());
+        const name = f.Key!.slice(prefix.length);
+        const ts = name.split(".")[0];
+        const data = await getObjectText(f.Key!);
+        if (data) captionMap.set(ts, data);
       }),
       ...uploaderFiles.map(async (f) => {
-        const ts = f.name.split(".")[0];
-        const { data } = await admin.storage.from(BUCKET).download(`${cat}/${f.name}`);
-        if (data) uploaderMap.set(ts, await data.text());
+        const name = f.Key!.slice(prefix.length);
+        const ts = name.split(".")[0];
+        const data = await getObjectText(f.Key!);
+        if (data) uploaderMap.set(ts, data);
       }),
     ]);
 
     for (const f of photos) {
-      const timestamp = parseInt(f.name.split(/[-.]/)[0], 10);
+      const path = f.Key!;
+      const name = path.slice(prefix.length);
+      const timestamp = parseInt(name.split(/[-.]/)[0], 10);
       if (isNaN(timestamp)) continue;
       const ts = String(timestamp);
-      const path = `${cat}/${f.name}`;
-      const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
       all.push({
         path,
-        publicUrl: pub.publicUrl,
+        publicUrl: mediaUrl(path),
         category: cat,
         timestamp,
         caption: captionMap.get(ts) || null,
         uploadedBy: uploaderMap.get(ts) || null,
-        createdAt: f.created_at || new Date(timestamp).toISOString(),
+        createdAt: f.LastModified?.toISOString() || new Date(timestamp).toISOString(),
       });
     }
   }

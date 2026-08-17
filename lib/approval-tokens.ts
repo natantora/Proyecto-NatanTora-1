@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/data/server";
 
 /**
  * Crea un par de tokens (approve / reject) para un user pending.
@@ -21,8 +21,8 @@ export async function createApprovalTokens(
     return null;
   }
 
-  const approveToken = data.find((t) => t.action === "approve")?.id;
-  const rejectToken = data.find((t) => t.action === "reject")?.id;
+  const approveToken = data.find((t: any) => t.action === "approve")?.id;
+  const rejectToken = data.find((t: any) => t.action === "reject")?.id;
   if (!approveToken || !rejectToken) return null;
 
   return { approveToken, rejectToken };

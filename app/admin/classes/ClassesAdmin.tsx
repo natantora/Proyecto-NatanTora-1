@@ -2,7 +2,6 @@
 
 import { useState, useRef } from 'react'
 import type { Role } from '@/lib/permissions'
-import { createClient } from '@/lib/supabase/client'
 import {
   ALLOWED_VIDEO_TYPES,
   ALLOWED_AUDIO_TYPES,
@@ -435,14 +434,12 @@ function MediaUploader({
         throw new Error(signJson.error || 'Error pidiendo permiso de subida')
       }
 
-      const supabase = createClient()
-      const { error: upErr } = await supabase.storage
-        .from('class-media')
-        .uploadToSignedUrl(signJson.path, signJson.token, file, {
-          contentType: file.type,
-          upsert: false,
-        })
-      if (upErr) throw new Error(upErr.message)
+      const uploadRes = await fetch(signJson.signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      if (!uploadRes.ok) throw new Error('No se pudo subir el archivo')
 
       setProgress(100)
       onUploaded(signJson.publicUrl)

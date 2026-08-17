@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/data/server";
 import { sendEmail } from "./email";
 import { sendWhatsApp } from "./whatsapp";
 import { createApprovalTokens } from "./approval-tokens";

@@ -39,7 +39,7 @@ export default function GallerySetup() {
         </h2>
         <p className="text-[14px] text-ink-soft leading-relaxed max-w-2xl">
           Antes de subir la primera foto, hay que crear el bucket de
-          almacenamiento en Supabase. Es un setup de una sola vez, automatizado.
+          Storage Bucket de Railway. Es una configuración de una sola vez.
           Tap el botón abajo y listo.
         </p>
       </div>

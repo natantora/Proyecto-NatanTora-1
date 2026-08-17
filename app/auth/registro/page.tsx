@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
 export default function RegistroPage() {
-  const supabase = createClient();
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -17,6 +15,7 @@ export default function RegistroPage() {
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [ownerReady, setOwnerReady] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,6 +29,7 @@ export default function RegistroPage() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Error al registrarse");
+      setOwnerReady(body.owner === true);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrarse");
@@ -40,30 +40,9 @@ export default function RegistroPage() {
 
   async function onOAuth(provider: "google" | "apple") {
     setOauthLoading(provider);
-    setError(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    if (error) {
-      const providerLabel = provider === "google" ? "Google" : "Apple";
-      const msg = (error.message || "").toLowerCase();
-      if (
-        msg.includes("provider") ||
-        msg.includes("not enabled") ||
-        msg.includes("unsupported") ||
-        msg.includes("validation_failed")
-      ) {
-        setError(
-          `Inicio con ${providerLabel} aún no está habilitado. Por favor regístrate con tu email mientras lo configuramos.`
-        );
-      } else {
-        setError(`No se pudo iniciar con ${providerLabel}: ${error.message}`);
-      }
-      setOauthLoading(null);
-    }
+    const providerLabel = provider === "google" ? "Google" : "Apple";
+    setError(`El registro con ${providerLabel} se habilitará después. Por ahora usa correo y contraseña.`);
+    setOauthLoading(null);
   }
 
   if (success) {
@@ -78,14 +57,15 @@ export default function RegistroPage() {
             ¡Gracias por registrarte!
           </h1>
           <p className="text-[15px] text-ink-soft leading-[1.8] mb-8">
-            Un administrador del Midrash revisará tu solicitud y te notificará
-            por correo cuando esté aprobada. Suele tomar 24-48 horas.
+            {ownerReady
+              ? "La cuenta propietaria quedó creada. Ya puedes iniciar sesión y abrir el panel administrativo."
+              : "Un administrador del Midrash revisará tu solicitud y te notificará por correo cuando esté aprobada. Suele tomar 24-48 horas."}
           </p>
           <Link
-            href="/"
+            href={ownerReady ? "/auth/login" : "/"}
             className="text-[11px] tracking-[0.18em] uppercase font-bold text-navy hover:text-gold transition-colors border-b border-line/40 pb-1"
           >
-            Volver al inicio →
+            {ownerReady ? "Iniciar sesión →" : "Volver al inicio →"}
           </Link>
         </div>
       </section>

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/data/server";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import { canReviewClasses, type Role } from "@/lib/permissions";
 import PendingReviewList from "./PendingReviewList";
@@ -21,7 +21,7 @@ export default async function PendingReviewPage() {
     .order("created_at", { ascending: true });
 
   // Cargar nombres de los rabinos (owner_id → profile.full_name)
-  const ownerIds = Array.from(new Set((pending ?? []).map((c) => c.owner_id).filter(Boolean) as string[]));
+  const ownerIds = Array.from(new Set((pending ?? []).map((c: any) => c.owner_id).filter(Boolean) as string[]));
   let ownerMap: Record<string, { name: string; email: string }> = {};
   if (ownerIds.length) {
     const { data: profs } = await supabase

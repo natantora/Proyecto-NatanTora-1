@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/data/server";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import { canEditGallery, canPromoteUsers, type Role } from "@/lib/permissions";
 import { readGallery } from "@/lib/gallery-server";

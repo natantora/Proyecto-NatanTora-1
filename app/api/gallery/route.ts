@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/data/server";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import { canEditGallery, type Role } from "@/lib/permissions";
+import { deleteObjects, mediaUrl, putObject } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
-const BUCKET = "gallery";
 const CATEGORIES = ["shabat", "fiesta", "clase", "evento", "general"] as const;
 type Category = (typeof CATEGORIES)[number];
 
@@ -60,42 +60,28 @@ export async function POST(req: NextRequest) {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 4);
   const timestamp = Date.now();
   const captionSlug = caption ? "-" + slugify(caption) : "";
-  const path = `${category}/${timestamp}${captionSlug}.${ext}`;
+  const path = `gallery/${category}/${timestamp}${captionSlug}.${ext}`;
 
-  const admin = createAdminClient();
-  const { error: upErr } = await admin.storage.from(BUCKET).upload(path, buf, {
-    contentType: file.type,
-    cacheControl: "3600",
-    upsert: false,
-  });
-  if (upErr) {
-    console.error("[api/gallery POST] upload error:", upErr);
-    return NextResponse.json({ error: upErr.message }, { status: 500 });
+  try { await putObject(path, buf, file.type); }
+  catch (error) {
+    console.error("[api/gallery POST] upload error:", error);
+    return NextResponse.json({ error: "No se pudo guardar la foto" }, { status: 500 });
   }
 
   // Embebemos caption + uploader en una "tag" adicional via lista de tags vacía
   // (no podemos tocar user_metadata via service_role del lado del cliente JS,
   // así que el caption se queda en el filename como slug + un sidecar JSON pequeño)
   if (caption) {
-    const sidecarPath = `${category}/${timestamp}.caption.txt`;
-    await admin.storage.from(BUCKET).upload(sidecarPath, Buffer.from(caption, "utf8"), {
-      contentType: "text/plain; charset=utf-8",
-      upsert: true,
-    });
+    const sidecarPath = `gallery/${category}/${timestamp}.caption.txt`;
+    await putObject(sidecarPath, Buffer.from(caption, "utf8"), "text/plain; charset=utf-8");
   }
-  const uploaderPath = `${category}/${timestamp}.uploader.txt`;
-  await admin.storage.from(BUCKET).upload(uploaderPath, Buffer.from(user.id, "utf8"), {
-    contentType: "text/plain; charset=utf-8",
-    upsert: true,
-  });
-
-  // URL pública
-  const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
+  const uploaderPath = `gallery/${category}/${timestamp}.uploader.txt`;
+  await putObject(uploaderPath, Buffer.from(user.id, "utf8"), "text/plain; charset=utf-8");
 
   return NextResponse.json({
     ok: true,
     path,
-    publicUrl: pub.publicUrl,
+    publicUrl: mediaUrl(path),
     caption: caption || null,
     category,
     timestamp,
@@ -120,25 +106,23 @@ export async function DELETE(req: NextRequest) {
 
   // Path debe ser en la forma {category}/{timestamp}.{ext}
   const parts = path.split("/");
-  if (parts.length !== 2 || !isValidCategory(parts[0])) {
+  if (parts.length !== 3 || parts[0] !== "gallery" || !isValidCategory(parts[1])) {
     return NextResponse.json({ error: "Path inválido" }, { status: 400 });
   }
 
   // Extraer timestamp del filename
-  const filename = parts[1];
+  const filename = parts[2];
   const timestamp = filename.split(/[-.]/)[0];
   if (!/^\d+$/.test(timestamp)) {
     return NextResponse.json({ error: "Timestamp inválido en filename" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
-  const captionPath = `${parts[0]}/${timestamp}.caption.txt`;
-  const uploaderPath = `${parts[0]}/${timestamp}.uploader.txt`;
-
-  const { error } = await admin.storage.from(BUCKET).remove([path, captionPath, uploaderPath]);
-  if (error) {
+  const captionPath = `gallery/${parts[1]}/${timestamp}.caption.txt`;
+  const uploaderPath = `gallery/${parts[1]}/${timestamp}.uploader.txt`;
+  try { await deleteObjects([path, captionPath, uploaderPath]); }
+  catch (error) {
     console.error("[api/gallery DELETE] error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo borrar la foto" }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

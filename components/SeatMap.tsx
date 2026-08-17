@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { SEAT_TIERS, type SeatTier } from "@/lib/constants";
 import { formatMXN, cn } from "@/lib/utils";
 import { Check, X, Loader2 } from "lucide-react";

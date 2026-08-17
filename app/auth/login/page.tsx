@@ -3,13 +3,11 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Loader2 } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,13 +20,15 @@ function LoginForm() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
+    const body = await res.json().catch(() => ({}));
     setLoading(false);
-    if (error) {
-      setError("Credenciales incorrectas.");
+    if (!res.ok) {
+      setError(body.error ?? "Credenciales incorrectas.");
       return;
     }
     router.push(next);
@@ -37,30 +37,9 @@ function LoginForm() {
 
   async function onOAuth(provider: "google" | "apple") {
     setOauthLoading(provider);
-    setError(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
-    });
-    if (error) {
-      const providerLabel = provider === "google" ? "Google" : "Apple";
-      const msg = (error.message || "").toLowerCase();
-      if (
-        msg.includes("provider") ||
-        msg.includes("not enabled") ||
-        msg.includes("unsupported") ||
-        msg.includes("validation_failed")
-      ) {
-        setError(
-          `Inicio con ${providerLabel} aún no está habilitado. Por favor regístrate con tu email mientras lo configuramos.`
-        );
-      } else {
-        setError(`No se pudo iniciar con ${providerLabel}: ${error.message}`);
-      }
-      setOauthLoading(null);
-    }
+    const providerLabel = provider === "google" ? "Google" : "Apple";
+    setError(`El acceso con ${providerLabel} se habilitará después. Por ahora usa correo y contraseña.`);
+    setOauthLoading(null);
   }
 
   return (
