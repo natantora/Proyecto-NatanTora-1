@@ -5,11 +5,12 @@ import ApprovalForm from "./ApprovalForm";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }
 
 export default async function ApprovePage({ params }: PageProps) {
-  const info = await getTokenInfo(params.token);
+  const { token } = await params;
+  const info = await getTokenInfo(token);
 
   // Token inválido
   if (!info) {
@@ -135,7 +136,7 @@ export default async function ApprovePage({ params }: PageProps) {
       </dl>
 
       <ApprovalForm
-        tokenId={params.token}
+        tokenId={token}
         action={info.action}
         userName={info.user?.full_name || "este miembro"}
       />
