@@ -88,12 +88,12 @@ export function oauthCookieName(provider: OAuthProvider): string {
   return `natantora_oauth_${provider}`;
 }
 
-function baseUrl(origin: string): string {
+export function appBaseUrl(origin: string): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || origin).replace(/\/$/, "");
 }
 
 export function callbackUrl(provider: OAuthProvider, origin: string): string {
-  return `${baseUrl(origin)}/api/auth/oauth/${provider}/callback`;
+  return `${appBaseUrl(origin)}/api/auth/oauth/${provider}/callback`;
 }
 
 function required(name: string): string {

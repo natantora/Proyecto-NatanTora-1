@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
+  appBaseUrl,
   authorizationUrl,
   createOAuthState,
   oauthCookieName,
@@ -30,6 +31,8 @@ export async function GET(
     return response;
   } catch (error) {
     console.error(`[oauth/${provider}]`, error);
-    return NextResponse.redirect(new URL(`/auth/login?oauth_error=${provider}_not_configured`, request.url));
+    return NextResponse.redirect(
+      new URL(`/auth/login?oauth_error=${provider}_not_configured`, appBaseUrl(request.nextUrl.origin)),
+    );
   }
 }
