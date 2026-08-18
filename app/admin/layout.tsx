@@ -4,8 +4,6 @@ import { createClient, createAdminClient } from "@/lib/data/server";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import {
   canAccessAdminPanel,
-  canEditAllClasses,
-  canEditHorarios,
   canEditEvents,
   canEditGallery,
   canManageSeats,
@@ -13,7 +11,6 @@ import {
   canManageMembers,
   canReviewClasses,
   ROLE_LABEL,
-  type Role,
 } from "@/lib/permissions";
 
 type NavItem = {
@@ -103,7 +100,7 @@ export default async function AdminLayout({
     <div className="min-h-screen bg-cream">
       {/* Editorial top bar */}
       <div className="bg-navy-deep text-cream border-b border-navy-soft">
-        <div className="mx-auto max-w-7xl px-6 lg:px-10 py-5 flex items-center justify-between gap-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex items-center gap-5">
             <Link
               href="/admin/dashboard"
@@ -116,7 +113,7 @@ export default async function AdminLayout({
               Midrash Natán Torá
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
             <span className="hidden sm:inline text-[10px] tracking-[0.22em] uppercase font-semibold text-gold-light/80">
               {role ? ROLE_LABEL[role] : ""}
             </span>
@@ -138,8 +135,33 @@ export default async function AdminLayout({
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-6 lg:px-10 py-10 lg:py-14 grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-10 lg:gap-16">
-        <aside className="lg:sticky lg:top-10 lg:self-start">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 py-6 sm:py-8 lg:py-14 grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-6 lg:gap-16">
+        <details className="lg:hidden border border-line bg-cream-light group">
+          <summary className="list-none cursor-pointer px-4 py-3.5 flex items-center justify-between gap-4 text-[11px] tracking-[0.2em] uppercase font-bold text-navy">
+            <span>Menú de administración</span>
+            <span className="text-gold-deep text-lg leading-none group-open:rotate-45 transition-transform">+</span>
+          </summary>
+          <nav className="border-t border-line p-3 grid grid-cols-2 gap-2">
+            {nav
+              .filter((item) => item.show)
+              .map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="min-w-0 text-[12px] leading-snug py-2.5 px-3 text-ink-soft bg-cream border border-line-soft hover:text-navy hover:border-gold transition-colors flex items-center justify-between gap-2"
+                >
+                  <span>{item.label}</span>
+                  {item.badge && item.badge > 0 ? (
+                    <span className="shrink-0 text-[10px] font-bold bg-gold text-navy-deep px-1.5 py-0.5 rounded-sm">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </Link>
+              ))}
+          </nav>
+        </details>
+
+        <aside className="hidden lg:block lg:sticky lg:top-10 lg:self-start">
           <div className="eyebrow text-gold mb-5">Secciones</div>
           <nav className="flex flex-col gap-1">
             {nav
@@ -160,7 +182,7 @@ export default async function AdminLayout({
               ))}
           </nav>
         </aside>
-        <div>{children}</div>
+        <div className="min-w-0">{children}</div>
       </div>
     </div>
   );
