@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSession } from "@/lib/auth";
 import { notifyAdminsOfPending } from "@/lib/notifications";
 import {
+  appBaseUrl,
   exchangeOAuthCode,
   findOrCreateOAuthAccount,
   oauthCookieName,
@@ -20,7 +21,8 @@ async function finish(
 ) {
   if (!isProvider(providerValue)) return NextResponse.json({ error: "Proveedor inválido" }, { status: 404 });
   const provider = providerValue;
-  const loginUrl = new URL("/auth/login", request.url);
+  const publicOrigin = appBaseUrl(request.nextUrl.origin);
+  const loginUrl = new URL("/auth/login", publicOrigin);
 
   try {
     if (values.error || !values.code) throw new Error(values.error || "OAUTH_CODE_MISSING");
@@ -51,7 +53,7 @@ async function finish(
     }
 
     const destination = account.status === "approved" ? saved.next : "/auth/pendiente";
-    const response = NextResponse.redirect(new URL(destination, request.url));
+    const response = NextResponse.redirect(new URL(destination, publicOrigin));
     response.cookies.set(oauthCookieName(provider), "", { path: "/api/auth/oauth", maxAge: 0 });
     return response;
   } catch (error) {
