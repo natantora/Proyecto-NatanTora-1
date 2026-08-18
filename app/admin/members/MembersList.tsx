@@ -16,11 +16,11 @@ const ROLE_BADGE_COLOR: Record<Role, string> = {
 };
 
 const ROLE_CAPS_SUMMARY: Record<Role, string[]> = {
-  member: ["Ver páginas privadas"],
-  rabino: ["Ver páginas privadas", "Subir SUS clases (con aprobación)"],
-  editor: ["Editar todas las clases", "Editar horarios, eventos y galería", "NO ve miembros ni pagos"],
-  admin: ["Editar todo el contenido", "Aprobar / rechazar miembros", "Vender asientos y procesar pagos", "NO puede asignar roles a otros"],
-  owner: ["Todo lo del Administrador", "Asignar roles a otros usuarios", "Cambiar admins, editores, rabinos"],
+  member: ["Ver el contenido privado después de ser aprobado", "Sin acceso al panel administrativo"],
+  rabino: ["Entrar al panel administrativo", "Subir y editar sus propias clases", "Sus clases necesitan aprobación antes de publicarse"],
+  editor: ["Editar y publicar todas las clases", "Aprobar clases pendientes", "Gestionar eventos y galería", "Sin acceso a miembros, asientos ni pagos"],
+  admin: ["Todo lo que puede hacer el Editor", "Aprobar o rechazar miembros", "Gestionar asientos y pagos", "No puede cambiar roles"],
+  owner: ["Todo lo que puede hacer el Administrador", "Cambiar roles de otros usuarios", "El rol Propietario no se asigna desde esta pantalla"],
 };
 
 export default function MembersList({ members, currentUserRole, currentUserId }: { members: Member[]; currentUserRole: Role; currentUserId: string; }) {
@@ -71,19 +71,21 @@ export default function MembersList({ members, currentUserRole, currentUserId }:
     <div className="space-y-6">
       {err && (<div className="bg-red-50 border border-red-200 px-4 py-3 text-[13px] text-red-800">{err}</div>)}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex flex-nowrap sm:flex-wrap gap-2 min-w-max sm:min-w-0">
         {([["all", "Todos"], ["pending", "Pendientes"], ["approved", "Aprobados"], ["rejected", "Rechazados"], ["staff", "Con rol"]] as [FilterKey, string][]).map(([key, label]) => (
-          <button key={key} onClick={() => setFilter(key)} className={"text-[11px] tracking-[0.22em] uppercase font-semibold px-4 py-2 border transition-colors duration-base ease-out-quart " + (filter === key ? "bg-navy text-cream border-navy" : "bg-cream-light text-ink-soft border-line hover:border-gold hover:text-navy")}>
+          <button key={key} onClick={() => setFilter(key)} className={"shrink-0 text-[11px] tracking-[0.18em] uppercase font-semibold px-3 sm:px-4 py-2 border transition-colors duration-base ease-out-quart " + (filter === key ? "bg-navy text-cream border-navy" : "bg-cream-light text-ink-soft border-line hover:border-gold hover:text-navy")}>
             {label} ({counts[key]})
           </button>
         ))}
+        </div>
       </div>
 
       {filtered.length === 0 && (<p className="text-[14px] text-ink-muted italic">Sin miembros en este filtro.</p>)}
 
       <div className="border border-line bg-cream-light">
-        <div className="hidden lg:grid grid-cols-[1.4fr_1.6fr_0.8fr_1.2fr_auto] gap-4 px-5 py-3 border-b border-line bg-cream text-[10px] tracking-[0.22em] uppercase font-bold text-ink-muted">
-          <div>Miembro</div><div>Contacto</div><div>Estado</div><div>Rol</div><div></div>
+        <div className="hidden xl:grid grid-cols-[minmax(140px,1.05fr)_minmax(180px,1.25fr)_minmax(105px,0.65fr)_minmax(220px,1.35fr)] gap-5 px-5 py-3 border-b border-line bg-cream text-[10px] tracking-[0.22em] uppercase font-bold text-ink-muted">
+          <div>Miembro</div><div>Contacto</div><div>Estado</div><div>Acceso y acciones</div>
         </div>
 
         {filtered.map((m) => {
@@ -96,8 +98,9 @@ export default function MembersList({ members, currentUserRole, currentUserId }:
 
           return (
             <div key={m.id} className={"border-b border-line last:border-b-0 transition-colors duration-base ease-out-quart " + (isExpanded ? "bg-white" : "hover:bg-white")}>
-              <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1.6fr_0.8fr_1.2fr_auto] gap-3 lg:gap-4 px-5 py-4 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(140px,1.05fr)_minmax(180px,1.25fr)_minmax(105px,0.65fr)_minmax(220px,1.35fr)] gap-4 xl:gap-5 px-4 sm:px-5 py-5 items-start xl:items-center">
                 <div className="min-w-0">
+                  <div className="xl:hidden text-[9px] tracking-[0.2em] uppercase font-bold text-ink-muted mb-1">Miembro</div>
                   <div className="text-[14px] font-semibold text-navy leading-tight truncate">
                     {m.full_name || (<span className="text-ink-muted italic font-normal">(sin nombre)</span>)}
                   </div>
@@ -106,33 +109,40 @@ export default function MembersList({ members, currentUserRole, currentUserId }:
                   </div>
                 </div>
                 <div className="min-w-0">
+                  <div className="xl:hidden text-[9px] tracking-[0.2em] uppercase font-bold text-ink-muted mb-1">Contacto</div>
                   <div className="text-[12px] text-ink leading-tight truncate">{m.email || (<span className="text-ink-muted italic">sin email</span>)}</div>
                   <div className="text-[12px] text-ink-soft mt-0.5">{m.phone || (<span className="text-ink-muted italic">sin teléfono</span>)}</div>
                 </div>
-                <div className="lg:block"><StatusBadge status={m.status} /></div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={"inline-block text-[10px] tracking-[0.22em] uppercase font-bold px-2 py-1 border " + ROLE_BADGE_COLOR[memberRole]}>{ROLE_LABEL[memberRole]}</span>
-                  <button onClick={() => setExpandedId(isExpanded ? null : m.id)} className="text-[10px] tracking-[0.18em] uppercase font-semibold text-ink-soft hover:text-gold-deep underline underline-offset-2 decoration-line" aria-expanded={isExpanded}>
-                    Ver permisos
-                  </button>
+                <div>
+                  <div className="xl:hidden text-[9px] tracking-[0.2em] uppercase font-bold text-ink-muted mb-1">Estado</div>
+                  <StatusBadge status={m.status} />
                 </div>
-                <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                <div className="min-w-0 sm:col-span-2 xl:col-span-1">
+                  <div className="xl:hidden text-[9px] tracking-[0.2em] uppercase font-bold text-ink-muted mb-2">Acceso y acciones</div>
+                  <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                    <span className={"inline-block text-[10px] tracking-[0.18em] uppercase font-bold px-2 py-1 border " + ROLE_BADGE_COLOR[memberRole]}>{ROLE_LABEL[memberRole]}</span>
+                    <button onClick={() => setExpandedId(isExpanded ? null : m.id)} className="text-[10px] tracking-[0.16em] uppercase font-semibold text-ink-soft hover:text-gold-deep underline underline-offset-2 decoration-line" aria-expanded={isExpanded}>
+                      {isExpanded ? "Ocultar permisos" : "Ver permisos"}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                   {isPending && (<>
-                    <button disabled={isLoading} onClick={() => updateStatus(m.id, "approved")} className="text-[10px] tracking-[0.18em] uppercase font-bold bg-navy text-cream px-2.5 py-1.5 hover:bg-navy-deep transition-colors duration-base ease-out-quart disabled:opacity-50">Aprobar</button>
-                    <button disabled={isLoading} onClick={() => updateStatus(m.id, "rejected")} className="text-[10px] tracking-[0.18em] uppercase font-bold text-ink-soft border border-line px-2.5 py-1.5 hover:border-ink hover:text-ink transition-colors duration-base ease-out-quart disabled:opacity-50">Rechazar</button>
+                    <button disabled={isLoading} onClick={() => updateStatus(m.id, "approved")} className="text-[10px] tracking-[0.16em] uppercase font-bold bg-navy text-cream px-3 py-2 hover:bg-navy-deep transition-colors duration-base ease-out-quart disabled:opacity-50">Aprobar</button>
+                    <button disabled={isLoading} onClick={() => updateStatus(m.id, "rejected")} className="text-[10px] tracking-[0.16em] uppercase font-bold text-ink-soft border border-line px-3 py-2 hover:border-ink hover:text-ink transition-colors duration-base ease-out-quart disabled:opacity-50">Rechazar</button>
                   </>)}
                   {m.status === "approved" && canChangeRoles && !isOwnerTarget && !isSelf && (
-                    <select disabled={isLoading} value={memberRole} onChange={(e) => isValidRole(e.target.value) && setRole(m.id, e.target.value as Role)} className="text-[11px] tracking-wide bg-cream border border-line px-2 py-1.5 focus:outline-none focus:border-gold disabled:opacity-50 font-semibold text-navy max-w-[140px]">
+                    <select aria-label={`Cambiar rol de ${m.full_name || m.email || "miembro"}`} disabled={isLoading} value={memberRole} onChange={(e) => isValidRole(e.target.value) && setRole(m.id, e.target.value as Role)} className="w-full sm:w-auto text-[11px] tracking-wide bg-cream border border-line px-3 py-2 focus:outline-none focus:border-gold disabled:opacity-50 font-semibold text-navy">
                       <option value="" disabled>Cambiar rol…</option>
                       {assignable.map((r) => (<option key={r} value={r}>{ROLE_LABEL[r]}</option>))}
                     </select>
                   )}
                   {isOwnerTarget && (<span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-gold-deep italic">Propietario</span>)}
                   {isSelf && m.status === "approved" && !isOwnerTarget && (<span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-ink-muted italic">Tú mismo</span>)}
+                  </div>
                 </div>
               </div>
               {isExpanded && (
-                <div className="bg-cream border-t border-line px-5 py-4">
+                <div className="bg-cream border-t border-line px-4 sm:px-5 py-4">
                   <div className="text-[10px] tracking-[0.22em] uppercase font-bold text-gold-deep mb-2">Permisos de {ROLE_LABEL[memberRole]}</div>
                   <div className="text-[12px] text-ink-soft mb-3 italic leading-relaxed">{ROLE_DESCRIPTION[memberRole]}</div>
                   <ul className="space-y-1.5">

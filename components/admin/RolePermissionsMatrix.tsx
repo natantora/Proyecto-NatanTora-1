@@ -33,6 +33,14 @@ const ROLE_COLOR: Record<Role, string> = {
   owner: "bg-gold/20 text-gold-deep",
 };
 
+const ROLE_SUMMARY: Record<Role, string[]> = {
+  member: ["Contenido privado aprobado", "Sin panel administrativo"],
+  rabino: ["Sus propias clases", "Publicación con aprobación"],
+  editor: ["Clases y revisiones", "Eventos y galería"],
+  admin: ["Contenido y miembros", "Asientos y pagos"],
+  owner: ["Todo el sistema", "Asignación de roles"],
+};
+
 export default function RolePermissionsMatrix({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -47,16 +55,21 @@ export default function RolePermissionsMatrix({ defaultOpen = false }: { default
       </button>
       {open && (
         <div className="border-t border-line p-5 lg:p-7 space-y-6 bg-cream">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
             {ROLE_ORDER.map((r) => (
               <div key={r} className={`p-3 border border-line ${ROLE_COLOR[r]}`}>
                 <div className="text-[10px] tracking-[0.22em] uppercase font-bold mb-1">{ROLE_LABEL[r]}</div>
                 <div className="text-[12px] leading-snug">{ROLE_DESCRIPTION[r]}</div>
+                <ul className="mt-2 space-y-1">
+                  {ROLE_SUMMARY[r].map((item) => (
+                    <li key={item} className="text-[11px] leading-snug flex gap-1.5"><span aria-hidden="true">•</span><span>{item}</span></li>
+                  ))}
+                </ul>
               </div>
             ))}
           </div>
-          <div className="overflow-x-auto -mx-5 lg:mx-0">
-            <table className="w-full text-[12px]">
+          <div className="overflow-x-auto -mx-5 px-5 lg:mx-0 lg:px-0 pb-2" role="region" aria-label="Comparación detallada de permisos" tabIndex={0}>
+            <table className="w-full min-w-[760px] text-[12px]">
               <thead>
                 <tr className="border-b border-line">
                   <th className="text-left py-2 px-3 text-[10px] tracking-[0.22em] uppercase font-bold text-ink-muted">Permiso</th>
@@ -79,7 +92,10 @@ export default function RolePermissionsMatrix({ defaultOpen = false }: { default
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-ink-muted leading-relaxed">Solo los <strong>propietarios</strong> pueden cambiar el rol de otros usuarios. El rol &quot;Propietario&quot; no se asigna desde el panel (por seguridad); se hace por SQL directo en la base de datos.</p>
+          <div className="space-y-2 text-[11px] text-ink-muted leading-relaxed">
+            <p>Solo los <strong>propietarios</strong> pueden cambiar el rol de otros usuarios. El rol &quot;Propietario&quot; no se asigna desde el panel (por seguridad).</p>
+            <p><strong>Nota:</strong> el permiso para editar horarios ya está definido, pero la pantalla de edición de horarios todavía está pendiente de construcción.</p>
+          </div>
         </div>
       )}
     </div>

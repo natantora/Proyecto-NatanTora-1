@@ -22,10 +22,10 @@ export default async function AdminMembersPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <div className="space-y-10">
+    <div className="min-w-0 space-y-7 sm:space-y-10">
       <div>
         <div className="eyebrow eyebrow-line text-gold mb-4">Comunidad</div>
-        <h1 className="serif-display text-navy">
+        <h1 className="serif-display text-navy text-[38px] sm:text-[48px] leading-[0.98]">
           Miembros del <em>Midrash</em>
         </h1>
         <p className="text-[14px] text-ink-soft mt-3 max-w-2xl leading-relaxed">
