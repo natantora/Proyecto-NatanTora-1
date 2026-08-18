@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
 export default function RegistroPage() {
+  const router = useRouter();
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -38,11 +40,10 @@ export default function RegistroPage() {
     }
   }
 
-  async function onOAuth(provider: "google" | "apple") {
+  function onOAuth(provider: "google" | "apple") {
     setOauthLoading(provider);
-    const providerLabel = provider === "google" ? "Google" : "Apple";
-    setError(`El registro con ${providerLabel} se habilitará después. Por ahora usa correo y contraseña.`);
-    setOauthLoading(null);
+    setError(null);
+    router.push(`/api/auth/oauth/${provider}?next=/`);
   }
 
   if (success) {

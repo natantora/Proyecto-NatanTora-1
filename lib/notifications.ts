@@ -45,7 +45,7 @@ export async function notifyAdminsOfPending(params: NotifyParams): Promise<void>
     const { data: admins, error } = await admin
       .from("profiles")
       .select("email, phone, full_name")
-      .eq("role", "admin")
+      .in("role", ["admin", "owner"])
       .eq("status", "approved");
 
     if (error || !admins || admins.length === 0) {

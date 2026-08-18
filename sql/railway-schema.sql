@@ -20,6 +20,20 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE INDEX IF NOT EXISTS idx_profiles_status ON profiles(status);
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
 
+ALTER TABLE profiles ALTER COLUMN password_hash DROP NOT NULL;
+
+CREATE TABLE IF NOT EXISTS oauth_accounts (
+  provider TEXT NOT NULL CHECK (provider IN ('google','apple')),
+  provider_account_id TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  email TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (provider, provider_account_id),
+  UNIQUE (provider, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_oauth_accounts_user ON oauth_accounts(user_id);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
