@@ -36,6 +36,8 @@ function isSeatEvent(title: string) {
 
 export default async function Eventos() {
   const db = createAdminClient();
+  const { data: { user } } = await db.auth.getUser();
+  const isLoggedIn = !!user;
   const { data, error } = await db
     .from("events")
     .select("id,title,description,event_date,location")
@@ -129,10 +131,10 @@ export default async function Eventos() {
                         ) : null}
                       </div>
                       <Link
-                        href={seats ? "/asientos" : "/auth/login"}
+                        href={seats ? "/asientos" : isLoggedIn ? "/contacto" : "/auth/login"}
                         className="text-[11px] tracking-[0.2em] uppercase text-gold-light border border-gold/40 px-5 py-3 hover:bg-gold hover:text-navy-deep hover:border-gold transition-colors whitespace-nowrap"
                       >
-                        {seats ? "Ver asientos" : "Inscribirme"}
+                        {seats ? "Ver asientos" : isLoggedIn ? "Más información" : "Inscribirme"}
                       </Link>
                     </li>
                   );

@@ -1,8 +1,12 @@
 import Link from "next/link";
 import ShabbatStrip from "@/components/ShabatWidget";
 import DailyZemanim from "@/components/DailyZemanim";
+import { getCurrentUser } from "@/lib/auth";
 
-export default function Home() {
+export default async function Home() {
+  const user = await getCurrentUser();
+  const isLoggedIn = !!user;
+
   return (
     <>
       <section className="relative bg-navy-deep text-cream overflow-hidden">
@@ -52,8 +56,8 @@ export default function Home() {
           </div>
 
           <div className="mt-14 lg:mt-20 flex flex-wrap gap-4 fade-in">
-            <Link href="/auth/registro" className="btn btn-primary">
-              Únete al Midrash
+            <Link href={isLoggedIn ? "/clases" : "/auth/registro"} className="btn btn-primary">
+              {isLoggedIn ? "Explorar clases" : "Únete al Midrash"}
             </Link>
             <Link href="/quienes-somos" className="btn btn-ghost">
               Conoce el Midrash
@@ -104,8 +108,9 @@ export default function Home() {
               <p className="text-[16px] text-ink-soft leading-[1.8] font-normal max-w-prose">
                 Tres caminos para vivir el Midrash: aprende con nuestros
                 maestros, súmate a la vida comunitaria, o apoya para que sigamos
-                creciendo. Para ver horarios de rezos del Midrash, clases y
-                eventos, regístrate y un administrador aprobará tu acceso.
+                creciendo. {isLoggedIn
+                  ? "Tu cuenta ya tiene acceso a los horarios, las clases y los eventos."
+                  : "Para ver horarios de rezos del Midrash, clases y eventos, regístrate y un administrador aprobará tu acceso."}
               </p>
             </div>
           </div>

@@ -70,7 +70,7 @@ function externalPlatformName(url: string): string {
   return 'otra pestaña'
 }
 
-export default function BibliotecaClient({ classes, error }: { classes: ClassRow[]; error: string | null }) {
+export default function BibliotecaClient({ classes, error, isLoggedIn }: { classes: ClassRow[]; error: string | null; isLoggedIn: boolean }) {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'video' | 'audio' | 'text'>('all')
   const [rabbiFilter, setRabbiFilter] = useState<string>('all')
@@ -179,7 +179,7 @@ export default function BibliotecaClient({ classes, error }: { classes: ClassRow
 
             <select
               value={sortBy}
-              onChange={e => setSortBy(e.target.value as any)}
+              onChange={e => setSortBy(e.target.value as 'recent' | 'oldest' | 'title')}
               className="bg-cream-light border border-line px-4 py-2 text-[13px] text-navy uppercase tracking-wider focus:outline-none focus:border-gold ml-auto"
             >
               <option value="recent">M&aacute;s recientes</option>
@@ -205,7 +205,7 @@ export default function BibliotecaClient({ classes, error }: { classes: ClassRow
                 ? 'Estamos preparando la biblioteca de clases del Midrash. Reg&iacute;strate para recibir aviso cuando publiquemos las primeras grabaciones.'
                 : 'Intenta con otros t&eacute;rminos de b&uacute;squeda o quita algunos filtros.'}
             </p>
-            {classes.length === 0 && (
+            {classes.length === 0 && !isLoggedIn && (
               <a href="/auth/registro" className="inline-block mt-8 bg-gold text-navy-deep px-6 py-3 text-[12px] font-bold tracking-[0.2em] uppercase hover:bg-gold-light transition-colors">
                 Registrarme
               </a>

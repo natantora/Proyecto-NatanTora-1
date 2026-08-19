@@ -23,6 +23,14 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
 
+  // Una cuenta con sesión activa no debe volver a ver acceso o registro.
+  if (session && (pathname === "/auth/login" || pathname === "/auth/registro")) {
+    const url = request.nextUrl.clone();
+    url.pathname = session.status === "approved" ? "/" : "/auth/pendiente";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   // /admin/* requiere acceso al panel (rabino, editor, admin u owner)
   if (pathname.startsWith("/admin")) {
     if (!session) {
