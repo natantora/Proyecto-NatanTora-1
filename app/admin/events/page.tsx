@@ -5,10 +5,18 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminEventsPage() {
   const supabase = createAdminClient();
-  const { data } = await supabase.from("events").select("*").order("event_date", { ascending: false });
+  const { data, error } = await supabase.from("events").select("*").order("event_date", { ascending: false });
   return (
     <div className="space-y-6">
       <h1 className="font-serif text-3xl font-bold text-midrash-900">Eventos</h1>
+      <p className="text-sm text-midrash-600">
+        Los eventos de esta lista son los mismos que aparecen en la página pública.
+      </p>
+      {error ? (
+        <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          No fue posible cargar los eventos. Intenta actualizar la página.
+        </div>
+      ) : null}
       <EventsAdmin initial={data ?? []} />
     </div>
   );
