@@ -91,6 +91,51 @@ CREATE TABLE IF NOT EXISTS events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Los eventos originales del diseño eran contenido fijo y por eso no aparecían
+-- en Administración. Esta migración los importa una sola vez a la tabla real.
+-- El marcador evita que vuelvan a crearse si un administrador los elimina.
+CREATE TABLE IF NOT EXISTS app_migrations (
+  key TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM app_migrations WHERE key = '2026-08-import-static-events'
+  ) THEN
+    INSERT INTO events (title, description, event_date, location)
+    SELECT 'Cena de Lag baOmer', 'Cena comunitaria · Cupo original: 80 personas', '2026-05-22 18:30:00-06', 'Salón principal'
+    WHERE NOT EXISTS (SELECT 1 FROM events WHERE LOWER(title) = LOWER('Cena de Lag baOmer'));
+
+    INSERT INTO events (title, description, event_date, location)
+    SELECT 'Shavuot — Tikún Leyl noche entera', 'Estudio toda la noche · Refrigerio incluido', '2026-06-02 22:00:00-06', 'Midrash Natán Torá'
+    WHERE NOT EXISTS (SELECT 1 FROM events WHERE LOWER(title) = LOWER('Shavuot — Tikún Leyl noche entera'));
+
+    INSERT INTO events (title, description, event_date, location)
+    SELECT 'Rosh haShaná — Selijot y Tefilot', 'Fiesta mayor · Plano de asientos disponible', '2026-09-23 08:00:00-06', 'Midrash Natán Torá'
+    WHERE NOT EXISTS (SELECT 1 FROM events WHERE LOWER(title) = LOWER('Rosh haShaná — Selijot y Tefilot'));
+
+    INSERT INTO events (title, description, event_date, location)
+    SELECT 'Pésaj — Séder comunitario', 'Registro histórico · El contenido original solo indicaba abril de 2026.', '2026-04-01 12:00:00-06', 'Midrash Natán Torá'
+    WHERE NOT EXISTS (SELECT 1 FROM events WHERE LOWER(title) = LOWER('Pésaj — Séder comunitario'));
+
+    INSERT INTO events (title, description, event_date, location)
+    SELECT 'Purim — Lectura de la Meguíla', 'Registro histórico · El contenido original solo indicaba marzo de 2026.', '2026-03-01 12:00:00-06', 'Midrash Natán Torá'
+    WHERE NOT EXISTS (SELECT 1 FROM events WHERE LOWER(title) = LOWER('Purim — Lectura de la Meguíla'));
+
+    INSERT INTO events (title, description, event_date, location)
+    SELECT 'Tu BiShvat — Mesa de frutos', 'Registro histórico · El contenido original solo indicaba enero de 2026.', '2026-01-01 12:00:00-06', 'Midrash Natán Torá'
+    WHERE NOT EXISTS (SELECT 1 FROM events WHERE LOWER(title) = LOWER('Tu BiShvat — Mesa de frutos'));
+
+    INSERT INTO events (title, description, event_date, location)
+    SELECT 'Janucá — Encendido público', 'Registro histórico · El contenido original solo indicaba diciembre de 2025.', '2025-12-01 12:00:00-06', 'Midrash Natán Torá'
+    WHERE NOT EXISTS (SELECT 1 FROM events WHERE LOWER(title) = LOWER('Janucá — Encendido público'));
+
+    INSERT INTO app_migrations (key) VALUES ('2026-08-import-static-events');
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   kind TEXT NOT NULL CHECK (kind IN ('rezo','clase')),
