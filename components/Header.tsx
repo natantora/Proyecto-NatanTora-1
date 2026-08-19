@@ -23,6 +23,11 @@ export default async function SiteHeader() {
   }
 
   return (
-    <HeaderClient isLoggedIn={!!user} approved={approved} isAdmin={isAdmin} />
+    <HeaderClient
+      isLoggedIn={!!user}
+      approved={approved}
+      isAdmin={isAdmin}
+      userName={user?.full_name || user?.email || undefined}
+    />
   );
 }

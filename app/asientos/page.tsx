@@ -5,8 +5,17 @@ import { createClient } from "@/lib/data/server";
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+type SeatHoliday = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+};
+
 export default async function AsientosPage() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const isLoggedIn = !!user;
   const now = new Date().toISOString();
 
   // Buscar holiday actualmente abierto (is_open=true y dentro de la ventana)
@@ -37,16 +46,18 @@ export default async function AsientosPage() {
             Te avisaremos por correo cuando comience la venta.
           </p>
           <p className="text-cream-dim text-sm">
-            Para recibir el aviso, asegúrate de estar registrado.
+            {isLoggedIn
+              ? "Te avisaremos cuando comience la venta."
+              : "Para recibir el aviso, asegúrate de estar registrado."}
           </p>
           <div className="flex gap-3 justify-center mt-6">
-            <Link href="/auth/registro" className="btn-primary">Registrarse</Link>
+            {!isLoggedIn && <Link href="/auth/registro" className="btn-primary">Registrarse</Link>}
             <Link href="/contacto" className="btn-outline">Contacto</Link>
           </div>
         </div>
       ) : (
         <div className="space-y-6">
-          {openHolidays.map((h: any) => (
+          {(openHolidays as SeatHoliday[]).map((h) => (
             <Link
               key={h.id}
               href={`/asientos/${h.slug}`}

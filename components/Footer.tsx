@@ -1,7 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
+import { getCurrentUser } from "@/lib/auth";
+import { canAccessAdminPanel, type Role } from "@/lib/permissions";
 
-export default function SiteFooter() {
+export default async function SiteFooter() {
+  const user = await getCurrentUser();
+  const isLoggedIn = !!user;
+  const hasAdmin = canAccessAdminPanel(user?.role as Role | null | undefined);
+
   return (
     <footer className="bg-navy-deep text-cream/65 relative overflow-hidden">
       <div
@@ -22,16 +28,33 @@ export default function SiteFooter() {
             </p>
           </div>
           <div className="lg:col-span-4 lg:col-start-9">
-            <p className="text-[13px] text-cream/55 leading-[1.75] mb-6 max-w-sm">
-              Si quieres formar parte del Midrash, solicita tu registro y un
-              administrador revisará tu solicitud.
-            </p>
-            <Link
-              href="/auth/registro"
-              className="inline-block text-[11px] tracking-[0.22em] uppercase font-bold text-gold-light border-b border-gold pb-1 hover:text-cream transition-colors duration-base ease-out-quart"
-            >
-              Hazte miembro →
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <p className="text-[13px] text-cream/55 leading-[1.75] mb-6 max-w-sm">
+                  Tu sesión está activa. Continúa explorando las clases, horarios
+                  y actividades del Midrash.
+                </p>
+                <Link
+                  href={hasAdmin ? "/admin/dashboard" : "/clases"}
+                  className="inline-block text-[11px] tracking-[0.22em] uppercase font-bold text-gold-light border-b border-gold pb-1 hover:text-cream transition-colors duration-base ease-out-quart"
+                >
+                  {hasAdmin ? "Abrir administración →" : "Explorar clases →"}
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] text-cream/55 leading-[1.75] mb-6 max-w-sm">
+                  Si quieres formar parte del Midrash, solicita tu registro y un
+                  administrador revisará tu solicitud.
+                </p>
+                <Link
+                  href="/auth/registro"
+                  className="inline-block text-[11px] tracking-[0.22em] uppercase font-bold text-gold-light border-b border-gold pb-1 hover:text-cream transition-colors duration-base ease-out-quart"
+                >
+                  Hazte miembro →
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -132,14 +155,16 @@ export default function SiteFooter() {
                   Asientos Yamim Noraim
                 </Link>
               </li>
-              <li>
-                <Link
-                  href="/auth/registro"
-                  className="hover:text-gold-light transition-colors duration-base ease-out-quart"
-                >
-                  Hazte miembro
-                </Link>
-              </li>
+              {!isLoggedIn && (
+                <li>
+                  <Link
+                    href="/auth/registro"
+                    className="hover:text-gold-light transition-colors duration-base ease-out-quart"
+                  >
+                    Hazte miembro
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const navLinks = [
   { href: "/", label: "Inicio" },
@@ -14,15 +15,27 @@ const navLinks = [
   { href: "/contacto", label: "Contacto" },
 ];
 
-type Props = { isLoggedIn: boolean; approved: boolean; isAdmin?: boolean };
+type Props = {
+  isLoggedIn: boolean;
+  approved: boolean;
+  isAdmin?: boolean;
+  userName?: string;
+};
 
-export default function HeaderClient({ isLoggedIn, approved, isAdmin }: Props) {
+export default function HeaderClient({ isLoggedIn, approved, isAdmin, userName }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   const showNav = approved;
   const showDonar = approved;
   const showLoginRegister = !isLoggedIn;
   const showPendiente = isLoggedIn && !approved;
+
+  async function logout() {
+    await fetch("/api/admin/logout", { method: "POST" });
+    router.replace("/");
+    router.refresh();
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-navy-deep/95 backdrop-blur-md border-b border-navy-soft/80 supports-[backdrop-filter]:bg-navy-deep/85">
@@ -77,6 +90,11 @@ export default function HeaderClient({ isLoggedIn, approved, isAdmin }: Props) {
               Admin
             </Link>
           )}
+          {isLoggedIn && approved && (
+            <span className="max-w-[150px] truncate text-[10px] tracking-[0.12em] uppercase font-semibold text-cream/50" title={userName}>
+              {userName || "Sesión activa"}
+            </span>
+          )}
           {showLoginRegister && (
             <>
               <Link
@@ -100,6 +118,15 @@ export default function HeaderClient({ isLoggedIn, approved, isAdmin }: Props) {
             >
               Mi solicitud
             </Link>
+          )}
+          {isLoggedIn && (
+            <button
+              type="button"
+              onClick={logout}
+              className="text-[11px] tracking-[0.18em] uppercase font-semibold text-cream/60 hover:text-gold-light transition-colors duration-base ease-out-quart"
+            >
+              Salir
+            </button>
           )}
         </div>
 
@@ -172,6 +199,15 @@ export default function HeaderClient({ isLoggedIn, approved, isAdmin }: Props) {
                 >
                   Mi solicitud
                 </Link>
+              )}
+              {isLoggedIn && (
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="text-[12px] tracking-[0.18em] uppercase font-semibold text-cream/65 hover:text-gold-light transition-colors duration-base ease-out-quart"
+                >
+                  Salir
+                </button>
               )}
             </div>
           </nav>

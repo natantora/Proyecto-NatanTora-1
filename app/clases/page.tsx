@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function Clases() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   const { data: classes, error } = await supabase
     .from('classes')
     .select('id, title, description, category, media_type, media_url, rabbi, duration_minutes, published_at, created_at')
@@ -33,7 +34,7 @@ export default async function Clases() {
         </div>
       </section>
 
-      <BibliotecaClient classes={classes ?? []} error={error?.message ?? null} />
+      <BibliotecaClient classes={classes ?? []} error={error?.message ?? null} isLoggedIn={!!user} />
     </>
   )
 }
