@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 const TABLES = new Set([
   "profiles", "sessions", "seats", "classes", "events", "schedules",
   "shabat_config", "payments", "seat_holidays", "approval_tokens", "oauth_accounts",
+  "event_seats", "event_reservations",
 ]);
 
 type Filter = { column: string; op: "=" | "IS" | ">=" | "IN"; value: unknown };

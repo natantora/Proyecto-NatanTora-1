@@ -88,8 +88,52 @@ CREATE TABLE IF NOT EXISTS events (
   event_date TIMESTAMPTZ NOT NULL,
   location TEXT DEFAULT 'Midrash Natan Tora',
   image_url TEXT,
+  seating_mode TEXT NOT NULL DEFAULT 'none',
+  capacity INT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE events ADD COLUMN IF NOT EXISTS seating_mode TEXT NOT NULL DEFAULT 'none';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS capacity INT;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'events_seating_mode_check') THEN
+    ALTER TABLE events ADD CONSTRAINT events_seating_mode_check
+      CHECK (seating_mode IN ('none', 'open', 'assigned'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'events_capacity_check') THEN
+    ALTER TABLE events ADD CONSTRAINT events_capacity_check
+      CHECK (capacity IS NULL OR capacity > 0);
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS event_seats (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  row_label TEXT NOT NULL,
+  seat_number INT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'available'
+    CHECK (status IN ('available', 'occupied')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (event_id, row_label, seat_number)
+);
+CREATE INDEX IF NOT EXISTS idx_event_seats_event ON event_seats(event_id, row_label, seat_number);
+CREATE INDEX IF NOT EXISTS idx_event_seats_status ON event_seats(event_id, status);
+
+CREATE TABLE IF NOT EXISTS event_reservations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  seat_id UUID REFERENCES event_seats(id) ON DELETE SET NULL,
+  holder_name TEXT NOT NULL,
+  holder_email TEXT NOT NULL,
+  holder_phone TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (event_id, user_id),
+  UNIQUE (event_id, seat_id)
+);
+CREATE INDEX IF NOT EXISTS idx_event_reservations_event ON event_reservations(event_id, created_at);
 
 -- Los eventos originales del diseño eran contenido fijo y por eso no aparecían
 -- en Administración. Esta migración los importa una sola vez a la tabla real.

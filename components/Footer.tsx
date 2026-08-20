@@ -147,14 +147,6 @@ export default async function SiteFooter() {
                   Donativos
                 </Link>
               </li>
-              <li>
-                <Link
-                  href="/asientos"
-                  className="hover:text-gold-light transition-colors duration-base ease-out-quart"
-                >
-                  Asientos Yamim Noraim
-                </Link>
-              </li>
               {!isLoggedIn && (
                 <li>
                   <Link

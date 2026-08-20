@@ -15,9 +15,8 @@ const CAPABILITIES: Capability[] = [
   { key: "review_classes", label: "Revisar / aprobar clases pendientes", roles: ["editor", "admin", "owner"] },
   { key: "edit_all_classes", label: "Editar / publicar / borrar cualquier clase", roles: ["editor", "admin", "owner"] },
   { key: "schedule", label: "Editar horarios de rezos y zemanim", roles: ["editor", "admin", "owner"] },
-  { key: "events", label: "Crear / editar eventos comunitarios", roles: ["editor", "admin", "owner"] },
+  { key: "events", label: "Crear eventos y configurar lugar libre o plano", roles: ["editor", "admin", "owner"] },
   { key: "gallery", label: "Gestionar galería de fotos", roles: ["editor", "admin", "owner"] },
-  { key: "seats", label: "Vender / configurar asientos para fiestas", roles: ["admin", "owner"] },
   { key: "payments", label: "Ver y procesar pagos", roles: ["admin", "owner"] },
   { key: "members", label: "Aprobar / rechazar nuevos miembros", roles: ["admin", "owner"] },
   { key: "promote", label: "Asignar roles a otros usuarios", roles: ["owner"] },
@@ -37,7 +36,7 @@ const ROLE_SUMMARY: Record<Role, string[]> = {
   member: ["Contenido privado aprobado", "Sin panel administrativo"],
   rabino: ["Sus propias clases", "Publicación con aprobación"],
   editor: ["Clases y revisiones", "Eventos y galería"],
-  admin: ["Contenido y miembros", "Asientos y pagos"],
+  admin: ["Contenido y miembros", "Reservaciones y pagos"],
   owner: ["Todo el sistema", "Asignación de roles"],
 };
 

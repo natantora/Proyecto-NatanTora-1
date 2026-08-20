@@ -6,7 +6,6 @@ import {
   canAccessAdminPanel,
   canEditEvents,
   canEditGallery,
-  canManageSeats,
   canManagePayments,
   canManageMembers,
   canReviewClasses,
@@ -83,11 +82,6 @@ export default async function AdminLayout({
       href: "/admin/gallery",
       label: "Galería",
       show: canEditGallery(role),
-    },
-    {
-      href: "/admin/seats",
-      label: "Asientos",
-      show: canManageSeats(role),
     },
     {
       href: "/admin/payments",

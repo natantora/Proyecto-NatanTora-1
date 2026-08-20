@@ -5,7 +5,7 @@
  *   member  → solo lectura, después de ser aprobado
  *   rabino  → crea SUS clases (todas requieren aprobación de admin/editor/owner)
  *   editor  → gestiona contenido público (clases, horarios, eventos, galería)
- *   admin   → todo: contenido + miembros + pagos + asientos
+ *   admin   → todo: contenido + miembros + pagos + reservaciones
  *   owner   → todo + promover/demoler otros usuarios
  *
  * Solo los owners pueden cambiar el rol de otros. Los admins NO pueden
@@ -32,7 +32,7 @@ export const ROLE_DESCRIPTION: Record<Role, string> = {
   member: "Solo lectura. Ve horarios, clases, eventos y galería.",
   rabino: "Sube sus propias clases. Todas pasan por aprobación.",
   editor: "Gestiona clases (todas), horarios, eventos y galería.",
-  admin: "Acceso completo: contenido, miembros, pagos y asientos.",
+  admin: "Acceso completo: contenido, miembros, pagos y reservaciones.",
   owner: "Acceso completo + puede asignar roles a otros usuarios.",
 };
 
