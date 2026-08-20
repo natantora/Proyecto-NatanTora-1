@@ -18,8 +18,8 @@ const ROLE_BADGE_COLOR: Record<Role, string> = {
 const ROLE_CAPS_SUMMARY: Record<Role, string[]> = {
   member: ["Ver el contenido privado después de ser aprobado", "Sin acceso al panel administrativo"],
   rabino: ["Entrar al panel administrativo", "Subir y editar sus propias clases", "Sus clases necesitan aprobación antes de publicarse"],
-  editor: ["Editar y publicar todas las clases", "Aprobar clases pendientes", "Gestionar eventos y galería", "Sin acceso a miembros, asientos ni pagos"],
-  admin: ["Todo lo que puede hacer el Editor", "Aprobar o rechazar miembros", "Gestionar asientos y pagos", "No puede cambiar roles"],
+  editor: ["Editar y publicar todas las clases", "Aprobar clases pendientes", "Gestionar eventos, reservaciones y galería", "Sin acceso a miembros ni pagos"],
+  admin: ["Todo lo que puede hacer el Editor", "Aprobar o rechazar miembros", "Gestionar reservaciones y pagos", "No puede cambiar roles"],
   owner: ["Todo lo que puede hacer el Administrador", "Cambiar roles de otros usuarios", "El rol Propietario no se asigna desde esta pantalla"],
 };
 

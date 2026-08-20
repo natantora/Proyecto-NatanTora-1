@@ -15,6 +15,8 @@ type EventRow = {
   description: string | null;
   event_date: string;
   location: string | null;
+  seating_mode: "none" | "open" | "assigned";
+  capacity: number | null;
 };
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", {
@@ -30,17 +32,13 @@ const timeFormatter = new Intl.DateTimeFormat("es-MX", {
   timeZone: "America/Mexico_City",
 });
 
-function isSeatEvent(title: string) {
-  return /rosh|yamim|asiento/i.test(title);
-}
-
 export default async function Eventos() {
   const db = createAdminClient();
   const { data: { user } } = await db.auth.getUser();
   const isLoggedIn = !!user;
   const { data, error } = await db
     .from("events")
-    .select("id,title,description,event_date,location")
+    .select("id,title,description,event_date,location,seating_mode,capacity")
     .order("event_date", { ascending: true });
 
   const now = new Date();
@@ -103,7 +101,11 @@ export default async function Eventos() {
                   const day = parts.find((part) => part.type === "day")?.value;
                   const month = parts.find((part) => part.type === "month")?.value;
                   const year = parts.find((part) => part.type === "year")?.value;
-                  const seats = isSeatEvent(event.title);
+                  const action = event.seating_mode === "assigned"
+                    ? "Elegir lugar"
+                    : event.seating_mode === "open"
+                      ? "Reservar"
+                      : "Ver evento";
                   return (
                     <li
                       key={event.id}
@@ -129,12 +131,17 @@ export default async function Eventos() {
                             {event.description}
                           </p>
                         ) : null}
+                        {event.seating_mode !== "none" ? (
+                          <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/55">
+                            {event.seating_mode === "assigned" ? "Selección en plano" : "Lugar libre"} · {event.capacity} lugares
+                          </p>
+                        ) : null}
                       </div>
                       <Link
-                        href={seats ? "/asientos" : isLoggedIn ? "/contacto" : "/auth/login"}
+                        href={isLoggedIn ? `/eventos/${event.id}` : "/auth/login"}
                         className="text-[11px] tracking-[0.2em] uppercase text-gold-light border border-gold/40 px-5 py-3 hover:bg-gold hover:text-navy-deep hover:border-gold transition-colors whitespace-nowrap"
                       >
-                        {seats ? "Ver asientos" : isLoggedIn ? "Más información" : "Inscribirme"}
+                        {isLoggedIn ? action : "Inscribirme"}
                       </Link>
                     </li>
                   );

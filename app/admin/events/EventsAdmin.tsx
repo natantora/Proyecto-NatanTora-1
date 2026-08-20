@@ -1,64 +1,198 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { Plus, Trash2, Loader2, X, Users, Armchair } from "lucide-react";
 
-type EventRow = { id: string; title: string; description: string | null; event_date: string; location: string | null; };
+type SeatingMode = "none" | "open" | "assigned";
+type EventRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  event_date: string;
+  location: string | null;
+  seating_mode: SeatingMode;
+  capacity: number | null;
+};
+
+const emptyForm = {
+  title: "",
+  description: "",
+  event_date: "",
+  location: "Midrash Natán Torá",
+  seating_mode: "none" as SeatingMode,
+  capacity: "",
+  rows: "5",
+  seats_per_row: "10",
+};
 
 export default function EventsAdmin({ initial }: { initial: EventRow[] }) {
   const [list, setList] = useState(initial);
   const [showForm, setShowForm] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: "", description: "", event_date: "", location: "Midrash Natán Torá" });
+  const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const planCapacity = (Number(form.rows) || 0) * (Number(form.seats_per_row) || 0);
 
   async function createEvent(e: React.FormEvent) {
-    e.preventDefault(); setSubmitting(true);
+    e.preventDefault();
+    setSubmitting(true);
     try {
-      const res = await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, event_date: new Date(form.event_date).toISOString() }) });
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, event_date: new Date(form.event_date).toISOString() }),
+      });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error);
-      setList((p) => [body.event, ...p]);
-      setForm({ title: "", description: "", event_date: "", location: "Midrash Natán Torá" });
+      setList((previous) => [body.event, ...previous]);
+      setForm(emptyForm);
       setShowForm(false);
-    } catch { alert("Error creando evento"); }
-    finally { setSubmitting(false); }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Error creando evento");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function deleteEvent(id: string) {
-    if (!confirm("¿Eliminar evento?")) return;
+    if (!confirm("¿Eliminar este evento y todas sus reservaciones?")) return;
     setLoadingId(id);
     try {
-      const res = await fetch("/api/events", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      const res = await fetch("/api/events", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
       if (!res.ok) throw new Error();
-      setList((p) => p.filter((x) => x.id !== id));
-    } catch { alert("Error"); }
-    finally { setLoadingId(null); }
+      setList((previous) => previous.filter((event) => event.id !== id));
+    } catch {
+      alert("No fue posible eliminar el evento");
+    } finally {
+      setLoadingId(null);
+    }
   }
 
   return (
-    <div className="space-y-4">
-      <button onClick={() => setShowForm(true)} className="btn-primary"><Plus className="mr-2 h-4 w-4" /> Nuevo evento</button>
-      {showForm && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl"><div className="flex items-start justify-between"><h3 className="font-serif text-xl font-bold">Nuevo evento</h3><button onClick={() => setShowForm(false)}><X className="h-5 w-5" /></button></div>
-        <form onSubmit={createEvent} className="mt-4 space-y-3">
-          <input required placeholder="Título" className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          <textarea placeholder="Descripción" className="input" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          <input required type="datetime-local" className="input" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} />
-          <input placeholder="Lugar" className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-          <button type="submit" disabled={submitting} className="btn-primary w-full">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear"}</button>
-        </form>
-      </div></div>)}
-      <div className="overflow-hidden rounded-xl border border-midrash-100 bg-white">
-        <table className="min-w-full divide-y divide-midrash-100">
-          <thead className="bg-midrash-50"><tr><th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Evento</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Fecha</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Lugar</th><th className="px-4 py-3 text-right text-xs font-semibold uppercase text-midrash-600">Acciones</th></tr></thead>
+    <div className="space-y-5">
+      <button onClick={() => setShowForm(true)} className="btn-primary">
+        <Plus className="mr-2 h-4 w-4" /> Nuevo evento
+      </button>
+
+      {showForm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/45 p-4">
+          <div className="my-8 w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-serif text-2xl font-bold text-midrash-900">Nuevo evento</h3>
+                <p className="mt-1 text-sm text-midrash-600">Elige aquí si necesita reservaciones y cómo se asignarán.</p>
+              </div>
+              <button type="button" aria-label="Cerrar" onClick={() => setShowForm(false)} className="rounded-lg p-2 hover:bg-midrash-50">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={createEvent} className="mt-6 space-y-4">
+              <input required placeholder="Título" className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+              <textarea placeholder="Descripción" className="input" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-midrash-600">
+                  Fecha y hora
+                  <input required type="datetime-local" className="input mt-1.5 normal-case" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-wide text-midrash-600">
+                  Lugar
+                  <input className="input mt-1.5 normal-case" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                </label>
+              </div>
+
+              <fieldset>
+                <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-midrash-600">Tipo de acceso</legend>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    ["none", "Sin reservación", "Solo se publica el evento."],
+                    ["open", "Lugar libre", "Se controla el cupo, sin asignar asiento."],
+                    ["assigned", "Con plano", "Cada persona elige su asiento."],
+                  ].map(([value, title, description]) => (
+                    <label key={value} className={`cursor-pointer rounded-xl border p-4 transition-colors ${form.seating_mode === value ? "border-gold bg-gold/10" : "border-midrash-100 hover:border-gold/50"}`}>
+                      <input type="radio" name="seating_mode" value={value} checked={form.seating_mode === value} onChange={() => setForm({ ...form, seating_mode: value as SeatingMode })} className="sr-only" />
+                      <span className="block text-sm font-bold text-midrash-900">{title}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-midrash-600">{description}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              {form.seating_mode === "open" ? (
+                <label className="block rounded-xl border border-midrash-100 bg-midrash-50 p-4 text-xs font-semibold uppercase tracking-wide text-midrash-600">
+                  Cupo total
+                  <input required min={1} max={1000} type="number" className="input mt-1.5 bg-white normal-case" placeholder="Ej. 120" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} />
+                  <span className="mt-2 block normal-case font-normal">Las personas apartan un lugar, pero no reciben un número de asiento.</span>
+                </label>
+              ) : null}
+
+              {form.seating_mode === "assigned" ? (
+                <div className="rounded-xl border border-midrash-100 bg-midrash-50 p-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-midrash-600">
+                      Número de filas
+                      <input required min={1} max={26} type="number" className="input mt-1.5 bg-white normal-case" value={form.rows} onChange={(e) => setForm({ ...form, rows: e.target.value })} />
+                    </label>
+                    <label className="text-xs font-semibold uppercase tracking-wide text-midrash-600">
+                      Asientos por fila
+                      <input required min={1} max={50} type="number" className="input mt-1.5 bg-white normal-case" value={form.seats_per_row} onChange={(e) => setForm({ ...form, seats_per_row: e.target.value })} />
+                    </label>
+                  </div>
+                  <p className="mt-3 text-sm text-midrash-700">El plano tendrá <strong>{planCapacity}</strong> lugares. Las filas se nombrarán A, B, C…</p>
+                </div>
+              ) : null}
+
+              <button type="submit" disabled={submitting} className="btn-primary w-full justify-center">
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear evento"}
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="overflow-x-auto rounded-xl border border-midrash-100 bg-white">
+        <table className="min-w-[760px] w-full divide-y divide-midrash-100">
+          <thead className="bg-midrash-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Evento</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Fecha</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Reservación</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-midrash-600">Acciones</th>
+            </tr>
+          </thead>
           <tbody className="divide-y divide-midrash-100">
-            {list.length === 0 && (<tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-midrash-500">Sin eventos.</td></tr>)}
-            {list.map((e) => (<tr key={e.id}>
-              <td className="px-4 py-3"><div className="font-medium text-midrash-900">{e.title}</div>{e.description && <div className="text-xs text-midrash-500">{e.description.slice(0, 60)}</div>}</td>
-              <td className="px-4 py-3 text-sm">{new Date(e.event_date).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</td>
-              <td className="px-4 py-3 text-sm">{e.location}</td>
-              <td className="px-4 py-3 text-right"><button disabled={loadingId === e.id} onClick={() => deleteEvent(e.id)} className="rounded p-1.5 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></td>
-            </tr>))}
+            {list.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-midrash-500">Sin eventos.</td></tr> : null}
+            {list.map((event) => (
+              <tr key={event.id}>
+                <td className="px-4 py-3">
+                  <div className="font-medium text-midrash-900">{event.title}</div>
+                  <div className="text-xs text-midrash-500">{event.location}</div>
+                </td>
+                <td className="px-4 py-3 text-sm">{new Date(event.event_date).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</td>
+                <td className="px-4 py-3 text-sm">
+                  {event.seating_mode === "open" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800"><Users className="h-3.5 w-3.5" /> Lugar libre · {event.capacity}</span>
+                  ) : event.seating_mode === "assigned" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"><Armchair className="h-3.5 w-3.5" /> Plano · {event.capacity}</span>
+                  ) : (
+                    <span className="text-xs text-midrash-500">Sin reservación</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="inline-flex items-center gap-2">
+                    <Link href={`/eventos/${event.id}`} className="rounded px-2 py-1 text-xs font-semibold text-midrash-700 hover:bg-midrash-50">Ver</Link>
+                    <button disabled={loadingId === event.id} onClick={() => deleteEvent(event.id)} className="rounded p-1.5 text-red-600 hover:bg-red-50" aria-label={`Eliminar ${event.title}`}>
+                      {loadingId === event.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
