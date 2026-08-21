@@ -125,13 +125,15 @@ CREATE INDEX IF NOT EXISTS idx_event_seats_status ON event_seats(event_id, statu
 -- mapa real en vez del generador genérico de filas). Nula para eventos viejos.
 ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS x REAL;
 ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS y REAL;
+ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS rotation REAL NOT NULL DEFAULT 0;
 
--- Plano real y único del salón: mesas (decorativas, dan contexto visual) y
--- sillas (los lugares reservables). Al crear un evento con reservación "Con
--- plano" se clona el contenido de venue_layout_seats hacia event_seats.
+-- Plano real y único del salón: mesas y paredes (decorativas, dan contexto
+-- visual) y sillas (los lugares reservables). Al crear un evento con
+-- reservación "Con plano" se clona el contenido de venue_layout_seats hacia
+-- event_seats.
 CREATE TABLE IF NOT EXISTS venue_layout_tables (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  kind TEXT NOT NULL CHECK (kind IN ('rect', 'round')),
+  kind TEXT NOT NULL CHECK (kind IN ('rect', 'round', 'wall')),
   x REAL NOT NULL,
   y REAL NOT NULL,
   width REAL NOT NULL,
@@ -141,13 +143,24 @@ CREATE TABLE IF NOT EXISTS venue_layout_tables (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'venue_layout_tables_kind_check') THEN
+    ALTER TABLE venue_layout_tables DROP CONSTRAINT venue_layout_tables_kind_check;
+  END IF;
+  ALTER TABLE venue_layout_tables ADD CONSTRAINT venue_layout_tables_kind_check
+    CHECK (kind IN ('rect', 'round', 'wall'));
+END $$;
+
 CREATE TABLE IF NOT EXISTS venue_layout_seats (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   x REAL NOT NULL,
   y REAL NOT NULL,
+  rotation REAL NOT NULL DEFAULT 0,
   label TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE venue_layout_seats ADD COLUMN IF NOT EXISTS rotation REAL NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS event_reservations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

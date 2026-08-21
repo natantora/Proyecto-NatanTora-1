@@ -74,12 +74,12 @@ export async function POST(req: NextRequest) {
         const values: unknown[] = [];
         const groups: string[] = [];
         venueSeats.forEach((seat, index) => {
-          values.push(created.id, seat.label ?? String(index + 1), index + 1, seat.x, seat.y);
-          const offset = values.length - 4;
-          groups.push(`($${offset}, $${offset + 1}, $${offset + 2}, 'available', $${offset + 3}, $${offset + 4})`);
+          values.push(created.id, seat.label ?? String(index + 1), index + 1, seat.x, seat.y, seat.rotation);
+          const offset = values.length - 5;
+          groups.push(`($${offset}, $${offset + 1}, $${offset + 2}, 'available', $${offset + 3}, $${offset + 4}, $${offset + 5})`);
         });
         await client.query(
-          `INSERT INTO event_seats (event_id, row_label, seat_number, status, x, y) VALUES ${groups.join(", ")}`,
+          `INSERT INTO event_seats (event_id, row_label, seat_number, status, x, y, rotation) VALUES ${groups.join(", ")}`,
           values,
         );
       }

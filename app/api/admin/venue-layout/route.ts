@@ -25,17 +25,18 @@ export async function PUT(req: NextRequest) {
   }
 
   const tables: NewVenueTable[] = body.tables.map((t: Record<string, unknown>) => ({
-    kind: t.kind === "round" ? "round" : "rect",
+    kind: t.kind === "round" ? "round" : t.kind === "wall" ? "wall" : "rect",
     x: Number(t.x) || 0,
     y: Number(t.y) || 0,
-    width: Math.max(10, Number(t.width) || 60),
-    height: Math.max(10, Number(t.height) || 60),
+    width: Math.max(4, Number(t.width) || 60),
+    height: Math.max(4, Number(t.height) || 60),
     rotation: Number(t.rotation) || 0,
     label: typeof t.label === "string" && t.label.trim() ? t.label.trim().slice(0, 60) : null,
   }));
   const seats: NewVenueSeat[] = body.seats.map((s: Record<string, unknown>) => ({
     x: Number(s.x) || 0,
     y: Number(s.y) || 0,
+    rotation: Number(s.rotation) || 0,
     label: typeof s.label === "string" && s.label.trim() ? s.label.trim().slice(0, 20) : null,
   }));
 

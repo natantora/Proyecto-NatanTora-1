@@ -15,7 +15,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const event = eventResult.rows[0];
   if (!event || !user) notFound();
   const [seatsResult, reservationResult, countResult, venueLayout] = await Promise.all([
-    event.seating_mode === "assigned" ? query<{ id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null }>("SELECT id, row_label, seat_number, status, x, y FROM event_seats WHERE event_id = $1 ORDER BY row_label, seat_number", [id]) : Promise.resolve({ rows: [] }),
+    event.seating_mode === "assigned" ? query<{ id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number }>("SELECT id, row_label, seat_number, status, x, y, rotation FROM event_seats WHERE event_id = $1 ORDER BY row_label, seat_number", [id]) : Promise.resolve({ rows: [] }),
     query<{ id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null }>(`SELECT r.id, r.seat_id, s.row_label, s.seat_number, s.x FROM event_reservations r LEFT JOIN event_seats s ON s.id = r.seat_id WHERE r.event_id = $1 AND r.user_id = $2 LIMIT 1`, [id, user.id]),
     query<{ count: string }>("SELECT COUNT(*)::text AS count FROM event_reservations WHERE event_id = $1", [id]),
     event.seating_mode === "assigned" ? getVenueLayout() : Promise.resolve({ tables: [], seats: [] }),

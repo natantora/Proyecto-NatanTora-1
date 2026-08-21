@@ -3,12 +3,10 @@
 import { useMemo, useState } from "react";
 import { Armchair, CheckCircle2, Loader2, Users } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
+import { CANVAS_W, CANVAS_H } from "@/lib/venue-canvas";
 
-type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null };
+type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null } | null;
-
-const CANVAS_W = 1000;
-const CANVAS_H = 560;
 
 export default function EventReservationClient({ eventId, mode, capacity, seats: initialSeats, venueTables, existingReservation, reservedCount }: {
   eventId: string; mode: "none" | "open" | "assigned"; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
@@ -83,17 +81,24 @@ export default function EventReservationClient({ eventId, mode, capacity, seats:
     <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tu asiento</h2><p className="mt-2 text-sm text-ink-soft">Este es el plano real del salón. Los lugares oscuros ya están ocupados.</p></div></div>
     <div className="mx-auto my-6 overflow-auto rounded-lg border border-line bg-white p-2">
       <svg viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} className="w-full min-w-[700px]">
-        {venueTables.map((t) => t.kind === "rect" ? (
-          <rect key={t.id} x={t.x - t.width / 2} y={t.y - t.height / 2} width={t.width} height={t.height} rx={3} transform={`rotate(${t.rotation} ${t.x} ${t.y})`} className="fill-navy/10 stroke-navy/40" />
-        ) : (
-          <circle key={t.id} cx={t.x} cy={t.y} r={t.width / 2} className="fill-navy/10 stroke-navy/40" />
-        ))}
+        {venueTables.map((t) => {
+          if (t.kind === "wall") {
+            return <rect key={t.id} x={t.x - t.width / 2} y={t.y - t.height / 2} width={t.width} height={t.height} transform={`rotate(${t.rotation} ${t.x} ${t.y})`} className="fill-navy" />;
+          }
+          if (t.kind === "rect") {
+            return <rect key={t.id} x={t.x - t.width / 2} y={t.y - t.height / 2} width={t.width} height={t.height} rx={3} transform={`rotate(${t.rotation} ${t.x} ${t.y})`} className="fill-navy/10 stroke-navy/40" />;
+          }
+          return <circle key={t.id} cx={t.x} cy={t.y} r={t.width / 2} className="fill-navy/10 stroke-navy/40" />;
+        })}
         {seats.map((seat) => {
           const occupied = seat.status === "occupied"; const isSelected = selectedId === seat.id;
-          return <g key={seat.id} onClick={() => !occupied && setSelectedId(seat.id)} className={occupied ? "cursor-not-allowed" : "cursor-pointer"}>
-            <circle cx={seat.x!} cy={seat.y!} r={10} aria-label={`Asiento ${seat.row_label}${occupied ? ", ocupado" : ""}`}
-              className={occupied ? "fill-navy stroke-navy" : isSelected ? "fill-gold stroke-gold-deep" : "fill-white stroke-navy hover:fill-gold/20"} strokeWidth={isSelected ? 2 : 1.2} />
-            <text x={seat.x!} y={seat.y!} textAnchor="middle" dominantBaseline="middle" className={`pointer-events-none select-none text-[9px] font-bold ${occupied ? "fill-cream/60" : "fill-navy"}`}>{seat.row_label}</text>
+          const cls = occupied ? "fill-navy stroke-navy" : isSelected ? "fill-gold stroke-gold-deep" : "fill-white stroke-navy hover:fill-gold/20";
+          return <g key={seat.id} onClick={() => !occupied && setSelectedId(seat.id)} className={occupied ? "cursor-not-allowed" : "cursor-pointer"} aria-label={`Asiento ${seat.row_label}${occupied ? ", ocupado" : ""}`}>
+            <g transform={`rotate(${seat.rotation} ${seat.x} ${seat.y})`}>
+              <rect x={seat.x! - 9} y={seat.y! - 10} width={18} height={3.5} rx={1} className={cls} strokeWidth={isSelected ? 2 : 1.2} />
+              <rect x={seat.x! - 8} y={seat.y! - 7} width={16} height={16} rx={2.5} className={cls} strokeWidth={isSelected ? 2 : 1.2} />
+            </g>
+            <text x={seat.x!} y={seat.y! + 1} textAnchor="middle" dominantBaseline="middle" className={`pointer-events-none select-none text-[8px] font-bold ${occupied ? "fill-cream/60" : "fill-navy"}`}>{seat.row_label}</text>
           </g>;
         })}
       </svg>
