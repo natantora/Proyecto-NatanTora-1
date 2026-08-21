@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         const groups: string[] = [];
         venueSeats.forEach((seat, index) => {
           values.push(created.id, seat.label ?? String(index + 1), index + 1, seat.x, seat.y);
-          const offset = values.length - 5;
+          const offset = values.length - 4;
           groups.push(`($${offset}, $${offset + 1}, $${offset + 2}, 'available', $${offset + 3}, $${offset + 4})`);
         });
         await client.query(
