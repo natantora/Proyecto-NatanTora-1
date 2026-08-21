@@ -22,17 +22,14 @@ const emptyForm = {
   location: "Midrash Natán Torá",
   seating_mode: "none" as SeatingMode,
   capacity: "",
-  rows: "5",
-  seats_per_row: "10",
 };
 
-export default function EventsAdmin({ initial }: { initial: EventRow[] }) {
+export default function EventsAdmin({ initial, venueSeatCount }: { initial: EventRow[]; venueSeatCount: number }) {
   const [list, setList] = useState(initial);
   const [showForm, setShowForm] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
-  const planCapacity = (Number(form.rows) || 0) * (Number(form.seats_per_row) || 0);
 
   async function createEvent(e: React.FormEvent) {
     e.preventDefault();
@@ -133,21 +130,18 @@ export default function EventsAdmin({ initial }: { initial: EventRow[] }) {
 
               {form.seating_mode === "assigned" ? (
                 <div className="rounded-xl border border-midrash-100 bg-midrash-50 p-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-midrash-600">
-                      Número de filas
-                      <input required min={1} max={26} type="number" className="input mt-1.5 bg-white normal-case" value={form.rows} onChange={(e) => setForm({ ...form, rows: e.target.value })} />
-                    </label>
-                    <label className="text-xs font-semibold uppercase tracking-wide text-midrash-600">
-                      Asientos por fila
-                      <input required min={1} max={50} type="number" className="input mt-1.5 bg-white normal-case" value={form.seats_per_row} onChange={(e) => setForm({ ...form, seats_per_row: e.target.value })} />
-                    </label>
-                  </div>
-                  <p className="mt-3 text-sm text-midrash-700">El plano tendrá <strong>{planCapacity}</strong> lugares. Las filas se nombrarán A, B, C…</p>
+                  {venueSeatCount > 0 ? (
+                    <p className="text-sm text-midrash-700">Se usará el plano real del salón: <strong>{venueSeatCount}</strong> lugares configurados.</p>
+                  ) : (
+                    <p className="text-sm text-red-700">
+                      Todavía no configuraste el mapa de asientos del salón.{" "}
+                      <Link href="/admin/seats" className="underline">Configúralo aquí</Link> antes de crear un evento con plano.
+                    </p>
+                  )}
                 </div>
               ) : null}
 
-              <button type="submit" disabled={submitting} className="btn-primary w-full justify-center">
+              <button type="submit" disabled={submitting || (form.seating_mode === "assigned" && venueSeatCount === 0)} className="btn-primary w-full justify-center">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear evento"}
               </button>
             </form>

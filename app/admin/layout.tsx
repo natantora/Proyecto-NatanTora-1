@@ -8,6 +8,7 @@ import {
   canEditGallery,
   canManagePayments,
   canManageMembers,
+  canManageSeats,
   canReviewClasses,
   ROLE_LABEL,
 } from "@/lib/permissions";
@@ -77,6 +78,11 @@ export default async function AdminLayout({
       href: "/admin/events",
       label: "Eventos",
       show: canEditEvents(role),
+    },
+    {
+      href: "/admin/seats",
+      label: "Mapa de asientos",
+      show: canManageSeats(role),
     },
     {
       href: "/admin/gallery",

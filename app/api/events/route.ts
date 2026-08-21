@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { transaction, query } from "@/lib/db";
 import { canEditEvents, type Role } from "@/lib/permissions";
+import { getVenueLayout } from "@/lib/venue-layout";
 
 type SeatingMode = "none" | "open" | "assigned";
 
@@ -30,8 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   let capacity: number | null = null;
-  let rows = 0;
-  let seatsPerRow = 0;
+  let venueSeats: Awaited<ReturnType<typeof getVenueLayout>>["seats"] = [];
 
   if (seatingMode === "open") {
     capacity = integer(body.capacity);
@@ -41,15 +41,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (seatingMode === "assigned") {
-    rows = integer(body.rows) ?? 0;
-    seatsPerRow = integer(body.seats_per_row) ?? 0;
-    capacity = rows * seatsPerRow;
-    if (rows < 1 || rows > 26 || seatsPerRow < 1 || seatsPerRow > 50 || capacity > 500) {
+    venueSeats = (await getVenueLayout()).seats;
+    if (venueSeats.length === 0) {
       return NextResponse.json(
-        { error: "El plano permite hasta 26 filas, 50 asientos por fila y 500 lugares en total" },
+        { error: "Primero configura el mapa de asientos del salón en Admin > Mapa de asientos" },
         { status: 400 },
       );
     }
+    capacity = venueSeats.length;
   }
 
   try {
@@ -74,15 +73,13 @@ export async function POST(req: NextRequest) {
       if (seatingMode === "assigned") {
         const values: unknown[] = [];
         const groups: string[] = [];
-        for (let row = 0; row < rows; row += 1) {
-          for (let seat = 1; seat <= seatsPerRow; seat += 1) {
-            values.push(created.id, String.fromCharCode(65 + row), seat);
-            const offset = values.length - 2;
-            groups.push(`($${offset}, $${offset + 1}, $${offset + 2}, 'available')`);
-          }
-        }
+        venueSeats.forEach((seat, index) => {
+          values.push(created.id, seat.label ?? String(index + 1), index + 1, seat.x, seat.y);
+          const offset = values.length - 5;
+          groups.push(`($${offset}, $${offset + 1}, $${offset + 2}, 'available', $${offset + 3}, $${offset + 4})`);
+        });
         await client.query(
-          `INSERT INTO event_seats (event_id, row_label, seat_number, status) VALUES ${groups.join(", ")}`,
+          `INSERT INTO event_seats (event_id, row_label, seat_number, status, x, y) VALUES ${groups.join(", ")}`,
           values,
         );
       }

@@ -121,6 +121,34 @@ CREATE TABLE IF NOT EXISTS event_seats (
 CREATE INDEX IF NOT EXISTS idx_event_seats_event ON event_seats(event_id, row_label, seat_number);
 CREATE INDEX IF NOT EXISTS idx_event_seats_status ON event_seats(event_id, status);
 
+-- Posición real del asiento dentro del plano del salón (si el evento usa el
+-- mapa real en vez del generador genérico de filas). Nula para eventos viejos.
+ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS x REAL;
+ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS y REAL;
+
+-- Plano real y único del salón: mesas (decorativas, dan contexto visual) y
+-- sillas (los lugares reservables). Al crear un evento con reservación "Con
+-- plano" se clona el contenido de venue_layout_seats hacia event_seats.
+CREATE TABLE IF NOT EXISTS venue_layout_tables (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind TEXT NOT NULL CHECK (kind IN ('rect', 'round')),
+  x REAL NOT NULL,
+  y REAL NOT NULL,
+  width REAL NOT NULL,
+  height REAL NOT NULL,
+  rotation REAL NOT NULL DEFAULT 0,
+  label TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS venue_layout_seats (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  x REAL NOT NULL,
+  y REAL NOT NULL,
+  label TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS event_reservations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,

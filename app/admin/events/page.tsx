@@ -1,11 +1,15 @@
 import { createAdminClient } from "@/lib/data/server";
+import { getVenueLayout } from "@/lib/venue-layout";
 import EventsAdmin from "./EventsAdmin";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminEventsPage() {
   const supabase = createAdminClient();
-  const { data, error } = await supabase.from("events").select("*").order("event_date", { ascending: false });
+  const [{ data, error }, layout] = await Promise.all([
+    supabase.from("events").select("*").order("event_date", { ascending: false }),
+    getVenueLayout(),
+  ]);
   return (
     <div className="space-y-6">
       <h1 className="font-serif text-3xl font-bold text-midrash-900">Eventos</h1>
@@ -17,7 +21,7 @@ export default async function AdminEventsPage() {
           No fue posible cargar los eventos. Intenta actualizar la página.
         </div>
       ) : null}
-      <EventsAdmin initial={data ?? []} />
+      <EventsAdmin initial={data ?? []} venueSeatCount={layout.seats.length} />
     </div>
   );
 }

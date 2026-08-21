@@ -23,13 +23,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       const existing = await client.query("SELECT id FROM event_reservations WHERE event_id = $1 AND user_id = $2 LIMIT 1", [eventId, user.id]);
       if (existing.rowCount) throw new Error("ALREADY_RESERVED");
 
-      let seat: { id: string; row_label: string; seat_number: number } | null = null;
+      let seat: { id: string; row_label: string; seat_number: number; x: number | null } | null = null;
       if (event.seating_mode === "open") {
         const countResult = await client.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM event_reservations WHERE event_id = $1", [eventId]);
         if (Number(countResult.rows[0]?.count ?? 0) >= (event.capacity ?? 0)) throw new Error("SOLD_OUT");
       } else {
         if (typeof body.seatId !== "string" || !body.seatId) throw new Error("SEAT_REQUIRED");
-        const seatResult = await client.query<{ id: string; row_label: string; seat_number: number; status: string }>("SELECT id, row_label, seat_number, status FROM event_seats WHERE id = $1 AND event_id = $2 FOR UPDATE", [body.seatId, eventId]);
+        const seatResult = await client.query<{ id: string; row_label: string; seat_number: number; status: string; x: number | null }>("SELECT id, row_label, seat_number, status, x FROM event_seats WHERE id = $1 AND event_id = $2 FOR UPDATE", [body.seatId, eventId]);
         const selected = seatResult.rows[0];
         if (!selected || selected.status !== "available") throw new Error("SEAT_UNAVAILABLE");
         seat = selected;
