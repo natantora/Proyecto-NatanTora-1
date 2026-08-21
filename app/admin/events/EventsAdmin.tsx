@@ -179,7 +179,7 @@ export default function EventsAdmin({ initial, venueSeatCount }: { initial: Even
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex items-center gap-2">
-                    <Link href={`/eventos/${event.id}`} className="rounded px-2 py-1 text-xs font-semibold text-midrash-700 hover:bg-midrash-50">Ver</Link>
+                    <Link href={`/admin/events/${event.id}`} className="rounded px-2 py-1 text-xs font-semibold text-midrash-700 hover:bg-midrash-50">Ver</Link>
                     <button disabled={loadingId === event.id} onClick={() => deleteEvent(event.id)} className="rounded p-1.5 text-red-600 hover:bg-red-50" aria-label={`Eliminar ${event.title}`}>
                       {loadingId === event.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     </button>
