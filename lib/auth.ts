@@ -52,8 +52,7 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+export async function getSessionByToken(token: string | undefined): Promise<AuthUser | null> {
   if (!token) return null;
   const result = await query<AuthUser>(
     `SELECT p.id, p.email, p.full_name, p.phone, p.status, p.role
@@ -63,6 +62,11 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     [hashToken(token)],
   );
   return result.rows[0] ?? null;
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return getSessionByToken(token);
 }
 
 export async function createSession(userId: string): Promise<void> {

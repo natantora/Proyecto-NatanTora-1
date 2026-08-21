@@ -2,8 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hash } from "bcryptjs";
 import { transaction } from "@/lib/db";
 import { notifyAdminsOfPending } from "@/lib/notifications";
+import { clientIp, isRateLimited } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
+  if (isRateLimited(`register:${clientIp(req)}`, 5, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Demasiadas solicitudes de registro. Intenta de nuevo más tarde." }, { status: 429 });
+  }
   const body = await req.json().catch(() => null);
   const email = String(body?.email ?? "").trim().toLowerCase();
   const password = String(body?.password ?? "");

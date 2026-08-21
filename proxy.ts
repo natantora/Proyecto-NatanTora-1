@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { canAccessAdminPanel, type Role } from "@/lib/permissions";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { SESSION_COOKIE, getSessionByToken, verifySessionToken } from "@/lib/auth";
 
 const PUBLIC_PATHS = new Set([
   "/",
@@ -21,7 +21,12 @@ function isPublic(pathname: string): boolean {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const session = verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  // verifySessionToken is a cheap signature/expiry check to skip a DB round trip
+  // for requests with no cookie or a garbage/expired one. The actual role/status
+  // used below always comes fresh from the DB so a rejected/degraded user or a
+  // logged-out session loses access immediately, not only after the JWT expires.
+  const session = verifySessionToken(token) ? await getSessionByToken(token) : null;
 
   // Una cuenta con sesión activa no debe volver a ver acceso o registro.
   if (session && (pathname === "/auth/login" || pathname === "/auth/registro")) {

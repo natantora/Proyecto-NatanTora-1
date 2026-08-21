@@ -2,10 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { compare } from "bcryptjs";
 import { query } from "@/lib/db";
 import { createSession } from "@/lib/auth";
+import { clientIp, isRateLimited } from "@/lib/rate-limit";
 
 type LoginRow = { id: string; password_hash: string | null; status: string };
 
 export async function POST(req: NextRequest) {
+  if (isRateLimited(`login:${clientIp(req)}`, 15, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: "Demasiados intentos. Intenta de nuevo en unos minutos." }, { status: 429 });
+  }
   const body = await req.json().catch(() => null);
   const email = String(body?.email ?? "").trim().toLowerCase();
   const password = String(body?.password ?? "");

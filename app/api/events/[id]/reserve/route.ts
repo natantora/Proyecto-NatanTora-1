@@ -1,10 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { transaction } from "@/lib/db";
+import { clientIp, isRateLimited } from "@/lib/rate-limit";
 
 type EventRecord = { id: string; seating_mode: "none" | "open" | "assigned"; capacity: number | null };
 
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  if (isRateLimited(`reserve:${clientIp(req)}`, 20, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: "Demasiados intentos. Intenta de nuevo en unos minutos." }, { status: 429 });
+  }
   const user = await getCurrentUser();
   if (!user || user.status !== "approved") return NextResponse.json({ error: "Necesitas una cuenta aprobada" }, { status: 401 });
   const { id: eventId } = await context.params;
