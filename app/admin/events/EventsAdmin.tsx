@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus, Trash2, Loader2, X, Users, Armchair } from "lucide-react";
 
 type SeatingMode = "none" | "open" | "assigned";
+type SeatPlanType = "architectural" | "custom";
 type EventRow = {
   id: string;
   title: string;
@@ -12,6 +13,7 @@ type EventRow = {
   event_date: string;
   location: string | null;
   seating_mode: SeatingMode;
+  seat_plan_type: SeatPlanType;
   capacity: number | null;
 };
 
@@ -21,6 +23,7 @@ const emptyForm = {
   event_date: "",
   location: "Midrash Natán Torá",
   seating_mode: "none" as SeatingMode,
+  seat_plan_type: "architectural" as SeatPlanType,
   capacity: "",
 };
 
@@ -129,9 +132,24 @@ export default function EventsAdmin({ initial, venueSeatCount }: { initial: Even
               ) : null}
 
               {form.seating_mode === "assigned" ? (
-                <div className="rounded-xl border border-midrash-100 bg-midrash-50 p-4">
+                <div className="space-y-3 rounded-xl border border-midrash-100 bg-midrash-50 p-4">
                   {venueSeatCount > 0 ? (
-                    <p className="text-sm text-midrash-700">Se usará el plano real del salón: <strong>{venueSeatCount}</strong> lugares configurados.</p>
+                    <>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-midrash-600">Plano para este evento</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className={`cursor-pointer rounded-xl border bg-white p-4 transition-colors ${form.seat_plan_type === "architectural" ? "border-gold ring-1 ring-gold/40" : "border-midrash-100 hover:border-gold/50"}`}>
+                          <input type="radio" name="seat_plan_type" className="sr-only" checked={form.seat_plan_type === "architectural"} onChange={() => setForm({ ...form, seat_plan_type: "architectural" })} />
+                          <span className="block text-sm font-bold text-midrash-900">Plano original</span>
+                          <span className="mt-1 block text-xs leading-relaxed text-midrash-600">Las personas tocan directamente una silla en el archivo real del salón.</span>
+                        </label>
+                        <label className={`cursor-pointer rounded-xl border bg-white p-4 transition-colors ${form.seat_plan_type === "custom" ? "border-gold ring-1 ring-gold/40" : "border-midrash-100 hover:border-gold/50"}`}>
+                          <input type="radio" name="seat_plan_type" className="sr-only" checked={form.seat_plan_type === "custom"} onChange={() => setForm({ ...form, seat_plan_type: "custom" })} />
+                          <span className="block text-sm font-bold text-midrash-900">Plano personalizado</span>
+                          <span className="mt-1 block text-xs leading-relaxed text-midrash-600">Usa el plano preparado en el editor para eventos con otra distribución.</span>
+                        </label>
+                      </div>
+                      <p className="text-xs text-midrash-500"><strong>{venueSeatCount}</strong> lugares configurados en el editor.</p>
+                    </>
                   ) : (
                     <p className="text-sm text-red-700">
                       Todavía no configuraste el mapa de asientos del salón.{" "}
@@ -172,7 +190,7 @@ export default function EventsAdmin({ initial, venueSeatCount }: { initial: Even
                   {event.seating_mode === "open" ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800"><Users className="h-3.5 w-3.5" /> Lugar libre · {event.capacity}</span>
                   ) : event.seating_mode === "assigned" ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"><Armchair className="h-3.5 w-3.5" /> Plano · {event.capacity}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"><Armchair className="h-3.5 w-3.5" /> {event.seat_plan_type === "custom" ? "Plano personalizado" : "Plano original"} · {event.capacity}</span>
                   ) : (
                     <span className="text-xs text-midrash-500">Sin reservación</span>
                   )}

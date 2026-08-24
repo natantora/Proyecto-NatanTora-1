@@ -3,14 +3,15 @@
 import { useMemo, useState } from "react";
 import { User } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
-import InteractiveSeatPlan from "@/components/InteractiveSeatPlan";
+import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
 type SeatingMode = "none" | "open" | "assigned";
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type Reservation = { id: string; seat_id: string | null; holder_name: string; holder_email: string; holder_phone: string | null; created_at: string };
 
-export default function EventSeatsAdmin({ seatingMode, capacity, seats, reservations, reservationCount, venueTables, canViewReservations }: {
+export default function EventSeatsAdmin({ seatingMode, planType, capacity, seats, reservations, reservationCount, venueTables, canViewReservations }: {
   seatingMode: SeatingMode;
+  planType: SeatPlanType;
   capacity: number | null;
   seats: Seat[];
   reservations: Reservation[];
@@ -57,6 +58,7 @@ export default function EventSeatsAdmin({ seatingMode, capacity, seats, reservat
           selectedSeatId={selectedSeatId}
           onSelect={setSelectedSeatId}
           allowOccupiedSelection
+          planType={planType}
         />
         <div className="space-y-4">
           <div className="flex gap-4 text-xs text-midrash-600">

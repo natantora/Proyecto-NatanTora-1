@@ -89,11 +89,13 @@ CREATE TABLE IF NOT EXISTS events (
   location TEXT DEFAULT 'Midrash Natan Tora',
   image_url TEXT,
   seating_mode TEXT NOT NULL DEFAULT 'none',
+  seat_plan_type TEXT NOT NULL DEFAULT 'architectural',
   capacity INT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE events ADD COLUMN IF NOT EXISTS seating_mode TEXT NOT NULL DEFAULT 'none';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS seat_plan_type TEXT NOT NULL DEFAULT 'architectural';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS capacity INT;
 
 DO $$
@@ -105,6 +107,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'events_capacity_check') THEN
     ALTER TABLE events ADD CONSTRAINT events_capacity_check
       CHECK (capacity IS NULL OR capacity > 0);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'events_seat_plan_type_check') THEN
+    ALTER TABLE events ADD CONSTRAINT events_seat_plan_type_check
+      CHECK (seat_plan_type IN ('architectural', 'custom'));
   END IF;
 END $$;
 

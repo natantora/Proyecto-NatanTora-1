@@ -5,6 +5,7 @@ import { canEditEvents, type Role } from "@/lib/permissions";
 import { getVenueLayout } from "@/lib/venue-layout";
 
 type SeatingMode = "none" | "open" | "assigned";
+type SeatPlanType = "architectural" | "custom";
 
 async function isAuthorized() {
   const user = await getCurrentUser();
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
   const seatingMode: SeatingMode = ["none", "open", "assigned"].includes(body.seating_mode)
     ? body.seating_mode
     : "none";
+  const seatPlanType: SeatPlanType = body.seat_plan_type === "custom" ? "custom" : "architectural";
 
   if (!title || Number.isNaN(eventDate.getTime())) {
     return NextResponse.json({ error: "Título y fecha son obligatorios" }, { status: 400 });
@@ -55,8 +57,8 @@ export async function POST(req: NextRequest) {
     const event = await transaction(async (client) => {
       const inserted = await client.query(
         `INSERT INTO events
-          (title, description, event_date, location, image_url, seating_mode, capacity)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+          (title, description, event_date, location, image_url, seating_mode, seat_plan_type, capacity)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
         [
           title,
@@ -65,6 +67,7 @@ export async function POST(req: NextRequest) {
           typeof body.location === "string" && body.location.trim() ? body.location.trim() : "Midrash Natán Torá",
           typeof body.image_url === "string" && body.image_url.trim() ? body.image_url.trim() : null,
           seatingMode,
+          seatPlanType,
           capacity,
         ],
       );

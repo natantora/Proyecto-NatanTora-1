@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Image as ImageIcon, Minus, Plus, Shapes } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
 import { CANVAS_H, CANVAS_W } from "@/lib/venue-canvas";
 
@@ -15,7 +15,7 @@ export type SeatPlanSeat = {
   rotation: number;
 };
 
-type ViewMode = "real" | "clear";
+export type SeatPlanType = "architectural" | "custom";
 
 export default function InteractiveSeatPlan({
   seats,
@@ -24,6 +24,7 @@ export default function InteractiveSeatPlan({
   onSelect,
   allowOccupiedSelection = false,
   planImageUrl = "/venue-plan-reference.png",
+  planType,
 }: {
   seats: SeatPlanSeat[];
   venueTables: VenueTable[];
@@ -31,8 +32,8 @@ export default function InteractiveSeatPlan({
   onSelect?: (seatId: string) => void;
   allowOccupiedSelection?: boolean;
   planImageUrl?: string;
+  planType: SeatPlanType;
 }) {
-  const [viewMode, setViewMode] = useState<ViewMode>("real");
   const [zoom, setZoom] = useState(1);
 
   function selectSeat(seat: SeatPlanSeat) {
@@ -42,24 +43,7 @@ export default function InteractiveSeatPlan({
 
   return (
     <div className="overflow-hidden rounded-xl border border-midrash-200 bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-midrash-100 bg-midrash-50 px-3 py-2">
-        <div className="inline-flex rounded-lg border border-midrash-200 bg-white p-1">
-          <button
-            type="button"
-            onClick={() => setViewMode("real")}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${viewMode === "real" ? "bg-navy text-white" : "text-midrash-600 hover:bg-midrash-50"}`}
-          >
-            <ImageIcon className="h-3.5 w-3.5" /> Plano real
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("clear")}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${viewMode === "clear" ? "bg-navy text-white" : "text-midrash-600 hover:bg-midrash-50"}`}
-          >
-            <Shapes className="h-3.5 w-3.5" /> Vista clara
-          </button>
-        </div>
-
+      <div className="flex flex-wrap items-center justify-end gap-2 border-b border-midrash-100 bg-midrash-50 px-3 py-2">
         <div className="flex items-center gap-1.5">
           <span className="mr-1 text-[11px] text-midrash-500">Acercamiento</span>
           <button
@@ -90,9 +74,9 @@ export default function InteractiveSeatPlan({
           className="block h-auto max-w-none"
           style={{ width: `${zoom * 100}%`, minWidth: zoom > 1 ? 700 : undefined }}
           role="img"
-          aria-label={viewMode === "real" ? "Plano real del salón con asientos seleccionables" : "Vista clara del salón con asientos seleccionables"}
+          aria-label={planType === "architectural" ? "Plano original del salón con sillas seleccionables" : "Plano personalizado del salón con asientos seleccionables"}
         >
-          {viewMode === "real" ? (
+          {planType === "architectural" ? (
             <image
               href={planImageUrl}
               x={0}
@@ -113,7 +97,7 @@ export default function InteractiveSeatPlan({
             const canSelect = !!onSelect && (!occupied || allowOccupiedSelection);
             const label = `Asiento ${seat.row_label}${occupied ? ", ocupado" : ", disponible"}`;
 
-            if (viewMode === "clear") {
+            if (planType === "custom") {
               const fill = selected ? "#d7b35a" : occupied ? "#7f1d1d" : "#ffffff";
               const stroke = selected ? "#9b7620" : occupied ? "#7f1d1d" : "#132746";
               return (
@@ -140,8 +124,8 @@ export default function InteractiveSeatPlan({
               );
             }
 
-            const fill = selected ? "rgba(215,179,90,.9)" : occupied ? "rgba(127,29,29,.78)" : "rgba(255,255,255,.68)";
-            const stroke = selected ? "#9b7620" : occupied ? "#7f1d1d" : "#b58a2b";
+            const fill = selected ? "rgba(215,179,90,.92)" : occupied ? "rgba(127,29,29,.72)" : "transparent";
+            const stroke = selected ? "#9b7620" : occupied ? "#7f1d1d" : "transparent";
             return (
               <g
                 key={seat.id}
@@ -152,7 +136,7 @@ export default function InteractiveSeatPlan({
                 onKeyDown={(event) => {
                   if (canSelect && (event.key === "Enter" || event.key === " ")) selectSeat(seat);
                 }}
-                className={canSelect ? "cursor-pointer" : "cursor-not-allowed"}
+                className={`${canSelect ? "group cursor-pointer" : "cursor-not-allowed"} focus:outline-none`}
               >
                 <title>{label}</title>
                 <rect
@@ -165,10 +149,13 @@ export default function InteractiveSeatPlan({
                   fill={fill}
                   stroke={stroke}
                   strokeWidth={selected ? 2.5 : 1.4}
+                  className={!selected && !occupied ? "transition-colors group-hover:fill-gold/35 group-hover:stroke-gold-deep group-focus:fill-gold/35 group-focus:stroke-gold-deep" : undefined}
                 />
-                <text x={seat.x} y={seat.y + 1} textAnchor="middle" dominantBaseline="middle" className={`pointer-events-none select-none text-[8px] font-bold ${occupied ? "fill-white" : "fill-navy"}`}>
-                  {seat.row_label}
-                </text>
+                {selected || occupied ? (
+                  <text x={seat.x} y={seat.y + 1} textAnchor="middle" dominantBaseline="middle" className="pointer-events-none select-none fill-white text-[8px] font-bold">
+                    {seat.row_label}
+                  </text>
+                ) : null}
               </g>
             );
           })}
