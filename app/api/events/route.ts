@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   let capacity: number | null = null;
-  let venueSeats: Awaited<ReturnType<typeof getVenueLayout>>["seats"] = [];
+  let venueLayout: Awaited<ReturnType<typeof getVenueLayout>> = { tables: [], seats: [] };
 
   if (seatingMode === "open") {
     capacity = integer(body.capacity);
@@ -41,14 +41,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (seatingMode === "assigned") {
-    venueSeats = (await getVenueLayout()).seats;
-    if (venueSeats.length === 0) {
+    venueLayout = await getVenueLayout();
+    if (venueLayout.seats.length === 0) {
       return NextResponse.json(
         { error: "Primero configura el mapa de asientos del salón en Admin > Mapa de asientos" },
         { status: 400 },
       );
     }
-    capacity = venueSeats.length;
+    capacity = venueLayout.seats.length;
   }
 
   try {
@@ -71,9 +71,22 @@ export async function POST(req: NextRequest) {
       const created = inserted.rows[0];
 
       if (seatingMode === "assigned") {
+        if (venueLayout.tables.length) {
+          const tableValues: unknown[] = [];
+          const tableGroups = venueLayout.tables.map((table) => {
+            tableValues.push(created.id, table.kind, table.x, table.y, table.width, table.height, table.rotation, table.label);
+            const offset = tableValues.length - 7;
+            return `($${offset}, $${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7})`;
+          });
+          await client.query(
+            `INSERT INTO event_venue_tables (event_id, kind, x, y, width, height, rotation, label) VALUES ${tableGroups.join(", ")}`,
+            tableValues,
+          );
+        }
+
         const values: unknown[] = [];
         const groups: string[] = [];
-        venueSeats.forEach((seat, index) => {
+        venueLayout.seats.forEach((seat, index) => {
           values.push(created.id, seat.label ?? String(index + 1), index + 1, seat.x, seat.y, seat.rotation);
           const offset = values.length - 5;
           groups.push(`($${offset}, $${offset + 1}, $${offset + 2}, 'available', $${offset + 3}, $${offset + 4}, $${offset + 5})`);

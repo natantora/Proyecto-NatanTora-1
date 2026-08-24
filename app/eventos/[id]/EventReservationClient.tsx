@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Armchair, CheckCircle2, Loader2, Users } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
-import { CANVAS_W, CANVAS_H } from "@/lib/venue-canvas";
+import InteractiveSeatPlan from "@/components/InteractiveSeatPlan";
 
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null } | null;
@@ -78,30 +78,14 @@ export default function EventReservationClient({ eventId, mode, capacity, seats:
   }
 
   return <div className="border border-line bg-cream-light p-4 sm:p-8">
-    <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tu asiento</h2><p className="mt-2 text-sm text-ink-soft">Este es el plano real del salón. Los lugares oscuros ya están ocupados.</p></div></div>
-    <div className="mx-auto my-6 overflow-auto rounded-lg border border-line bg-white p-2">
-      <svg viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} className="w-full min-w-[700px]">
-        {venueTables.map((t) => {
-          if (t.kind === "wall") {
-            return <rect key={t.id} x={t.x - t.width / 2} y={t.y - t.height / 2} width={t.width} height={t.height} transform={`rotate(${t.rotation} ${t.x} ${t.y})`} className="fill-navy" />;
-          }
-          if (t.kind === "rect") {
-            return <rect key={t.id} x={t.x - t.width / 2} y={t.y - t.height / 2} width={t.width} height={t.height} rx={3} transform={`rotate(${t.rotation} ${t.x} ${t.y})`} className="fill-navy/10 stroke-navy/40" />;
-          }
-          return <circle key={t.id} cx={t.x} cy={t.y} r={t.width / 2} className="fill-navy/10 stroke-navy/40" />;
-        })}
-        {seats.map((seat) => {
-          const occupied = seat.status === "occupied"; const isSelected = selectedId === seat.id;
-          const cls = occupied ? "fill-navy stroke-navy" : isSelected ? "fill-gold stroke-gold-deep" : "fill-white stroke-navy hover:fill-gold/20";
-          return <g key={seat.id} onClick={() => !occupied && setSelectedId(seat.id)} className={occupied ? "cursor-not-allowed" : "cursor-pointer"} aria-label={`Asiento ${seat.row_label}${occupied ? ", ocupado" : ""}`}>
-            <g transform={`rotate(${seat.rotation} ${seat.x} ${seat.y})`}>
-              <rect x={seat.x! - 9} y={seat.y! - 10} width={18} height={3.5} rx={1} className={cls} strokeWidth={isSelected ? 2 : 1.2} />
-              <rect x={seat.x! - 8} y={seat.y! - 7} width={16} height={16} rx={2.5} className={cls} strokeWidth={isSelected ? 2 : 1.2} />
-            </g>
-            <text x={seat.x!} y={seat.y! + 1} textAnchor="middle" dominantBaseline="middle" className={`pointer-events-none select-none text-[8px] font-bold ${occupied ? "fill-cream/60" : "fill-navy"}`}>{seat.row_label}</text>
-          </g>;
-        })}
-      </svg>
+    <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tu asiento</h2><p className="mt-2 text-sm text-ink-soft">Selecciona directamente un lugar sobre el plano original. También puedes cambiar a la vista clara o acercar el plano.</p></div></div>
+    <div className="my-6">
+      <InteractiveSeatPlan
+        seats={seats}
+        venueTables={venueTables}
+        selectedSeatId={selectedId}
+        onSelect={setSelectedId}
+      />
     </div>
     {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
     <div className="mt-6 flex flex-col items-stretch justify-between gap-4 border-t border-line pt-5 sm:flex-row sm:items-center"><p className="text-sm text-ink-soft">{selected ? <>Seleccionaste <strong className="text-navy">{selected.row_label}</strong></> : "Selecciona un lugar del plano"}</p><button onClick={reserve} disabled={loading || !selectedId} className="btn-primary justify-center">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar asiento"}</button></div>

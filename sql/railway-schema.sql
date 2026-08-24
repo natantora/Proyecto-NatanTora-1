@@ -162,6 +162,33 @@ CREATE TABLE IF NOT EXISTS venue_layout_seats (
 );
 ALTER TABLE venue_layout_seats ADD COLUMN IF NOT EXISTS rotation REAL NOT NULL DEFAULT 0;
 
+-- Cada evento conserva una copia de las mesas y paredes que existían cuando
+-- se creó. Así, editar el salón para un evento futuro no mueve el contexto
+-- visual de eventos que ya tienen reservaciones.
+CREATE TABLE IF NOT EXISTS event_venue_tables (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('rect', 'round', 'wall')),
+  x REAL NOT NULL,
+  y REAL NOT NULL,
+  width REAL NOT NULL,
+  height REAL NOT NULL,
+  rotation REAL NOT NULL DEFAULT 0,
+  label TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_event_venue_tables_event ON event_venue_tables(event_id, created_at);
+
+-- Congela también los eventos con plano creados antes de esta actualización.
+INSERT INTO event_venue_tables (event_id, kind, x, y, width, height, rotation, label)
+SELECT e.id, t.kind, t.x, t.y, t.width, t.height, t.rotation, t.label
+  FROM events e
+ CROSS JOIN venue_layout_tables t
+ WHERE e.seating_mode = 'assigned'
+   AND NOT EXISTS (
+     SELECT 1 FROM event_venue_tables snapshot WHERE snapshot.event_id = e.id
+   );
+
 CREATE TABLE IF NOT EXISTS event_reservations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { query } from "@/lib/db";
-import { getVenueLayout } from "@/lib/venue-layout";
+import { getEventVenueTables } from "@/lib/venue-layout";
 import EventReservationClient from "./EventReservationClient";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
     event.seating_mode === "assigned" ? query<{ id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number }>("SELECT id, row_label, seat_number, status, x, y, rotation FROM event_seats WHERE event_id = $1 ORDER BY row_label, seat_number", [id]) : Promise.resolve({ rows: [] }),
     query<{ id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null }>(`SELECT r.id, r.seat_id, s.row_label, s.seat_number, s.x FROM event_reservations r LEFT JOIN event_seats s ON s.id = r.seat_id WHERE r.event_id = $1 AND r.user_id = $2 LIMIT 1`, [id, user.id]),
     query<{ count: string }>("SELECT COUNT(*)::text AS count FROM event_reservations WHERE event_id = $1", [id]),
-    event.seating_mode === "assigned" ? getVenueLayout() : Promise.resolve({ tables: [], seats: [] }),
+    event.seating_mode === "assigned" ? getEventVenueTables(id) : Promise.resolve([]),
   ]);
   return <main className="min-h-screen bg-cream">
     <section className="bg-navy-deep px-6 py-16 text-cream sm:py-20"><div className="mx-auto max-w-5xl">
@@ -27,6 +27,6 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       <p className="mt-5 text-sm text-cream/70">{new Date(event.event_date).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" })} · {event.location || "Midrash Natán Torá"}</p>
       {event.description ? <p className="mt-6 max-w-2xl leading-relaxed text-cream/80">{event.description}</p> : null}
     </div></section>
-    <section className="px-4 py-12 sm:px-6 sm:py-16"><div className="mx-auto max-w-5xl"><EventReservationClient eventId={event.id} mode={event.seating_mode} capacity={event.capacity} seats={seatsResult.rows} venueTables={venueLayout.tables} existingReservation={reservationResult.rows[0] ?? null} reservedCount={Number(countResult.rows[0]?.count ?? 0)} /></div></section>
+    <section className="px-4 py-12 sm:px-6 sm:py-16"><div className="mx-auto max-w-5xl"><EventReservationClient eventId={event.id} mode={event.seating_mode} capacity={event.capacity} seats={seatsResult.rows} venueTables={venueLayout} existingReservation={reservationResult.rows[0] ?? null} reservedCount={Number(countResult.rows[0]?.count ?? 0)} /></div></section>
   </main>;
 }
