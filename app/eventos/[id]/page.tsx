@@ -6,7 +6,7 @@ import { getEventVenueTables } from "@/lib/venue-layout";
 import EventReservationClient from "./EventReservationClient";
 
 export const dynamic = "force-dynamic";
-type EventRecord = { id: string; title: string; description: string | null; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; capacity: number | null };
+type EventRecord = { id: string; title: string; description: string | null; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; seat_plan_type: "architectural" | "custom"; capacity: number | null };
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -27,6 +27,6 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       <p className="mt-5 text-sm text-cream/70">{new Date(event.event_date).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" })} · {event.location || "Midrash Natán Torá"}</p>
       {event.description ? <p className="mt-6 max-w-2xl leading-relaxed text-cream/80">{event.description}</p> : null}
     </div></section>
-    <section className="px-4 py-12 sm:px-6 sm:py-16"><div className="mx-auto max-w-5xl"><EventReservationClient eventId={event.id} mode={event.seating_mode} capacity={event.capacity} seats={seatsResult.rows} venueTables={venueLayout} existingReservation={reservationResult.rows[0] ?? null} reservedCount={Number(countResult.rows[0]?.count ?? 0)} /></div></section>
+    <section className="px-4 py-12 sm:px-6 sm:py-16"><div className="mx-auto max-w-5xl"><EventReservationClient eventId={event.id} mode={event.seating_mode} planType={event.seat_plan_type ?? "architectural"} capacity={event.capacity} seats={seatsResult.rows} venueTables={venueLayout} existingReservation={reservationResult.rows[0] ?? null} reservedCount={Number(countResult.rows[0]?.count ?? 0)} /></div></section>
   </main>;
 }

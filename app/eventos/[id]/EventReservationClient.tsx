@@ -3,13 +3,13 @@
 import { useMemo, useState } from "react";
 import { Armchair, CheckCircle2, Loader2, Users } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
-import InteractiveSeatPlan from "@/components/InteractiveSeatPlan";
+import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null } | null;
 
-export default function EventReservationClient({ eventId, mode, capacity, seats: initialSeats, venueTables, existingReservation, reservedCount }: {
-  eventId: string; mode: "none" | "open" | "assigned"; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
+export default function EventReservationClient({ eventId, mode, planType, capacity, seats: initialSeats, venueTables, existingReservation, reservedCount }: {
+  eventId: string; mode: "none" | "open" | "assigned"; planType: SeatPlanType; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
   existingReservation: Reservation; reservedCount: number;
 }) {
   const [seats, setSeats] = useState(initialSeats);
@@ -78,13 +78,14 @@ export default function EventReservationClient({ eventId, mode, capacity, seats:
   }
 
   return <div className="border border-line bg-cream-light p-4 sm:p-8">
-    <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tu asiento</h2><p className="mt-2 text-sm text-ink-soft">Selecciona directamente un lugar sobre el plano original. También puedes cambiar a la vista clara o acercar el plano.</p></div></div>
+    <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tu asiento</h2><p className="mt-2 text-sm text-ink-soft">{planType === "architectural" ? "Toca directamente la silla que quieres en el plano original. Las sillas ocupadas aparecen marcadas." : "Selecciona un lugar en el plano preparado para este evento."}</p></div></div>
     <div className="my-6">
       <InteractiveSeatPlan
         seats={seats}
         venueTables={venueTables}
         selectedSeatId={selectedId}
         onSelect={setSelectedId}
+        planType={planType}
       />
     </div>
     {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}

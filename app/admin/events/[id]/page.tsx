@@ -8,7 +8,7 @@ import EventSeatsAdmin from "./EventSeatsAdmin";
 
 export const dynamic = "force-dynamic";
 
-type EventRecord = { id: string; title: string; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; capacity: number | null };
+type EventRecord = { id: string; title: string; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; seat_plan_type: "architectural" | "custom"; capacity: number | null };
 type SeatRow = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type ReservationRow = { id: string; seat_id: string | null; holder_name: string; holder_email: string; holder_phone: string | null; created_at: string };
 
@@ -18,7 +18,7 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
   const canViewReservations = canManageSeats(user.role as Role);
 
   const { id } = await params;
-  const eventResult = await query<EventRecord>("SELECT id, title, event_date, location, seating_mode, capacity FROM events WHERE id = $1 LIMIT 1", [id]);
+  const eventResult = await query<EventRecord>("SELECT id, title, event_date, location, seating_mode, seat_plan_type, capacity FROM events WHERE id = $1 LIMIT 1", [id]);
   const event = eventResult.rows[0];
   if (!event) notFound();
 
@@ -47,6 +47,7 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
       </div>
       <EventSeatsAdmin
         seatingMode={event.seating_mode}
+        planType={event.seat_plan_type ?? "architectural"}
         capacity={event.capacity}
         seats={seatsResult.rows}
         reservations={reservationsResult.rows}
