@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { query } from "@/lib/db";
-import { canEditEvents, type Role } from "@/lib/permissions";
-import { getVenueLayout } from "@/lib/venue-layout";
+import { canEditEvents, canManageSeats, type Role } from "@/lib/permissions";
+import { getEventVenueTables } from "@/lib/venue-layout";
 import EventSeatsAdmin from "./EventSeatsAdmin";
 
 export const dynamic = "force-dynamic";
@@ -15,21 +15,25 @@ type ReservationRow = { id: string; seat_id: string | null; holder_name: string;
 export default async function AdminEventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user || user.status !== "approved" || !canEditEvents(user.role as Role)) redirect("/admin/dashboard");
+  const canViewReservations = canManageSeats(user.role as Role);
 
   const { id } = await params;
   const eventResult = await query<EventRecord>("SELECT id, title, event_date, location, seating_mode, capacity FROM events WHERE id = $1 LIMIT 1", [id]);
   const event = eventResult.rows[0];
   if (!event) notFound();
 
-  const [seatsResult, reservationsResult, venueLayout] = await Promise.all([
+  const [seatsResult, reservationsResult, reservationCountResult, venueTables] = await Promise.all([
     event.seating_mode === "assigned"
       ? query<SeatRow>("SELECT id, row_label, seat_number, status, x, y, rotation FROM event_seats WHERE event_id = $1 ORDER BY row_label, seat_number", [id])
       : Promise.resolve({ rows: [] as SeatRow[] }),
-    query<ReservationRow>(
-      "SELECT id, seat_id, holder_name, holder_email, holder_phone, created_at FROM event_reservations WHERE event_id = $1 ORDER BY created_at",
-      [id],
-    ),
-    event.seating_mode === "assigned" ? getVenueLayout() : Promise.resolve({ tables: [], seats: [] }),
+    canViewReservations
+      ? query<ReservationRow>(
+          "SELECT id, seat_id, holder_name, holder_email, holder_phone, created_at FROM event_reservations WHERE event_id = $1 ORDER BY created_at",
+          [id],
+        )
+      : Promise.resolve({ rows: [] as ReservationRow[] }),
+    query<{ count: string }>("SELECT COUNT(*)::text AS count FROM event_reservations WHERE event_id = $1", [id]),
+    event.seating_mode === "assigned" ? getEventVenueTables(id) : Promise.resolve([]),
   ]);
 
   return (
@@ -46,7 +50,9 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
         capacity={event.capacity}
         seats={seatsResult.rows}
         reservations={reservationsResult.rows}
-        venueTables={venueLayout.tables}
+        reservationCount={Number(reservationCountResult.rows[0]?.count ?? 0)}
+        venueTables={venueTables}
+        canViewReservations={canViewReservations}
       />
     </div>
   );

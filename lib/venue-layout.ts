@@ -29,6 +29,17 @@ export async function getVenueLayout(): Promise<{ tables: VenueTable[]; seats: V
   return { tables: tables.rows, seats: seats.rows };
 }
 
+export async function getEventVenueTables(eventId: string): Promise<VenueTable[]> {
+  const result = await query<VenueTable>(
+    `SELECT id, kind, x, y, width, height, rotation, label
+       FROM event_venue_tables
+      WHERE event_id = $1
+      ORDER BY created_at`,
+    [eventId],
+  );
+  return result.rows;
+}
+
 export type NewVenueTable = { kind: TableKind; x: number; y: number; width: number; height: number; rotation: number; label: string | null };
 export type NewVenueSeat = { x: number; y: number; rotation: number; label: string | null };
 
