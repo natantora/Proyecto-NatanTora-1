@@ -243,7 +243,7 @@ export default function EventsAdmin({ initial, architecturalSeatCount, customSea
                   <div className="font-medium text-midrash-900">{event.title}</div>
                   <div className="text-xs text-midrash-500">{event.location}</div>
                 </td>
-                <td className="px-4 py-3 text-sm">{new Date(event.event_date).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</td>
+                <td className="px-4 py-3 text-sm">{new Date(event.event_date).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Mexico_City" })}</td>
                 <td className="px-4 py-3 text-sm">
                   {!event.published ? (
                     <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Borrador</span>
