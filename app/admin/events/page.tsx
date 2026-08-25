@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/data/server";
 import { getVenueLayout } from "@/lib/venue-layout";
+import { ARCHITECTURAL_SEATS } from "@/lib/architectural-seat-map";
 import EventsAdmin from "./EventsAdmin";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,11 @@ export default async function AdminEventsPage() {
           No fue posible cargar los eventos. Intenta actualizar la página.
         </div>
       ) : null}
-      <EventsAdmin initial={data ?? []} venueSeatCount={layout.seats.length} />
+      <EventsAdmin
+        initial={data ?? []}
+        architecturalSeatCount={ARCHITECTURAL_SEATS.length}
+        customSeatCount={layout.seats.length}
+      />
     </div>
   );
 }

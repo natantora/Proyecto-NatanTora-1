@@ -168,6 +168,16 @@ CREATE TABLE IF NOT EXISTS venue_layout_seats (
 );
 ALTER TABLE venue_layout_seats ADD COLUMN IF NOT EXISTS rotation REAL NOT NULL DEFAULT 0;
 
+-- Sillas detectadas directamente en el plano arquitectonico original.
+-- Se mantienen separadas del editor para que ambos planos sean independientes.
+CREATE TABLE IF NOT EXISTS architectural_plan_seats (
+  seat_number INT PRIMARY KEY,
+  x REAL NOT NULL,
+  y REAL NOT NULL,
+  rotation REAL NOT NULL DEFAULT 0,
+  label TEXT NOT NULL UNIQUE
+);
+
 -- Cada evento conserva una copia de las mesas y paredes que existían cuando
 -- se creó. Así, editar el salón para un evento futuro no mueve el contexto
 -- visual de eventos que ya tienen reservaciones.
