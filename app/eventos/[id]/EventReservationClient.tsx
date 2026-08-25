@@ -74,11 +74,20 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
 
   const selected = seats.filter((seat) => selectedIds.includes(seat.id));
   const toggleSeat = (seatId: string) => setSelectedIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
-  const selectionText = selected.length > 0 ? <>Seleccionaste <strong className="text-navy">{selected.map((seat) => seat.x !== null ? seat.row_label : `${seat.row_label}${seat.seat_number}`).join(", ")}</strong></> : "Selecciona uno o varios lugares del plano";
+  const selectedNames = selected.map((seat) => seat.x !== null ? seat.row_label : `${seat.row_label}${seat.seat_number}`);
+  const compactNames = selectedNames.length > 4 ? `${selectedNames.slice(0, 4).join(", ")} y ${selectedNames.length - 4} más` : selectedNames.join(", ");
   const confirmText = loading ? <Loader2 className="h-4 w-4 animate-spin" /> : selectedIds.length > 1 ? `Confirmar ${selectedIds.length} asientos` : "Confirmar asiento";
+  const reservationControls = (
+    <div className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-gold/30 bg-cream-light/95 px-4 py-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(10,29,54,.16)] backdrop-blur sm:static sm:mt-6 sm:flex sm:justify-between sm:border-line sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-5 sm:shadow-none" aria-live="polite">
+      <p className="min-w-0 text-sm text-ink-soft">
+        {selected.length > 0 ? <><strong className="block text-navy sm:inline">{selected.length} {selected.length === 1 ? "asiento" : "asientos"}</strong><span className="block truncate sm:ml-1 sm:inline">{compactNames}</span></> : "Selecciona uno o varios lugares"}
+      </p>
+      <button onClick={reserve} disabled={loading || selectedIds.length === 0} className="btn-primary min-h-11 shrink-0 justify-center px-4">{confirmText}</button>
+    </div>
+  );
 
   if (!hasMap) {
-    return <div className="border border-line bg-cream-light p-4 sm:p-8">
+    return <div className="border border-line bg-cream-light p-3 pb-28 sm:p-8">
       <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tus asientos</h2><p className="mt-2 text-sm text-ink-soft">Los lugares oscuros ya están ocupados. Selecciona todos los asientos que quieras reservar.</p></div></div>
       <div className="mx-auto my-8 max-w-2xl border border-gold/40 bg-navy py-3 text-center text-[10px] font-bold uppercase tracking-[0.3em] text-gold-light">Frente / escenario</div>
       <div className="overflow-x-auto pb-3"><div className="mx-auto min-w-max space-y-3">
@@ -88,13 +97,13 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
         })}</div>)}
       </div></div>
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
-      <div className="mt-6 flex flex-col items-stretch justify-between gap-4 border-t border-line pt-5 sm:flex-row sm:items-center"><p className="text-sm text-ink-soft">{selectionText}</p><button onClick={reserve} disabled={loading || selectedIds.length === 0} className="btn-primary justify-center">{confirmText}</button></div>
+      {reservationControls}
     </div>;
   }
 
-  return <div className="border border-line bg-cream-light p-4 sm:p-8">
+  return <div className="border border-line bg-cream-light p-3 pb-28 sm:p-8">
     <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tus asientos</h2><p className="mt-2 text-sm text-ink-soft">{planType === "architectural" ? "Toca directamente todas las sillas que quieres en el plano original. Vuelve a tocar una silla para quitarla de tu selección." : "Selecciona uno o varios lugares en el plano preparado para este evento."}</p></div></div>
-    <div className="my-6">
+    <div className="my-4 sm:my-6">
       <InteractiveSeatPlan
         seats={seats}
         venueTables={venueTables}
@@ -104,7 +113,8 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
         planType={planType}
       />
     </div>
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-muted sm:text-xs"><span><strong className="text-gold-deep">Dorado</strong> seleccionado</span><span><strong className="text-red-800">Rojo</strong> ocupado</span></div>
     {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
-    <div className="mt-6 flex flex-col items-stretch justify-between gap-4 border-t border-line pt-5 sm:flex-row sm:items-center"><p className="text-sm text-ink-soft">{selectionText}</p><button onClick={reserve} disabled={loading || selectedIds.length === 0} className="btn-primary justify-center">{confirmText}</button></div>
+    {reservationControls}
   </div>;
 }
