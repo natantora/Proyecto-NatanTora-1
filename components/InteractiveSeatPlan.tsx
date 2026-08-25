@@ -21,6 +21,7 @@ export default function InteractiveSeatPlan({
   seats,
   venueTables,
   selectedSeatId,
+  selectedSeatIds,
   onSelect,
   allowOccupiedSelection = false,
   planImageUrl = "/venue-plan-reference.png",
@@ -29,6 +30,7 @@ export default function InteractiveSeatPlan({
   seats: SeatPlanSeat[];
   venueTables: VenueTable[];
   selectedSeatId: string | null;
+  selectedSeatIds?: string[];
   onSelect?: (seatId: string) => void;
   allowOccupiedSelection?: boolean;
   planImageUrl?: string;
@@ -93,7 +95,7 @@ export default function InteractiveSeatPlan({
           {seats.map((seat) => {
             if (seat.x === null || seat.y === null) return null;
             const occupied = seat.status === "occupied";
-            const selected = selectedSeatId === seat.id;
+            const selected = selectedSeatId === seat.id || selectedSeatIds?.includes(seat.id) === true;
             const canSelect = !!onSelect && (!occupied || allowOccupiedSelection);
             const label = `Asiento ${seat.row_label}${occupied ? ", ocupado" : ", disponible"}`;
 
