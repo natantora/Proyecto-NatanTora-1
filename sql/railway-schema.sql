@@ -380,8 +380,8 @@ INSERT INTO schedules (kind, name, description, days, time, time_mode, offset_mi
   ('rezo', 'Shajarit', 'Primer minyán', 'Lunes a Viernes', '07:00', 'fixed', 0, TRUE, '🕐', 1),
   ('rezo', 'Minha', 'Rezo de la tarde', 'Domingo a Jueves', '13:30', 'fixed', 0, TRUE, '☀️', 4),
   ('rezo', 'Arvit', 'Horario calculado diariamente', 'Domingo a Jueves', NULL, 'before_sunset', -15, TRUE, '🌙', 5),
-  ('clase', 'Halaja Diaria', 'Clase de Shuljan HaMelej con el Rab', 'Domingo a Jueves', '8:00 AM', '📖', 10),
-  ('clase', 'Parashat Hashavua', 'Estudio semanal de la porcion de Tora', 'Miercoles', '9:00 PM', '📜', 11)
+  ('clase', 'Halaja Diaria', 'Clase de Shuljan HaMelej con el Rab', 'Domingo a Jueves', '08:00', 'fixed', 0, TRUE, '📖', 10),
+  ('clase', 'Parashat Hashavua', 'Estudio semanal de la porcion de Tora', 'Miercoles', '21:00', 'fixed', 0, TRUE, '📜', 11)
 ON CONFLICT DO NOTHING;
 
 DO $$
