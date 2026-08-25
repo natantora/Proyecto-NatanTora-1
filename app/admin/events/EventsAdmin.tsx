@@ -27,7 +27,7 @@ const emptyForm = {
   capacity: "",
 };
 
-export default function EventsAdmin({ initial, venueSeatCount }: { initial: EventRow[]; venueSeatCount: number }) {
+export default function EventsAdmin({ initial, architecturalSeatCount, customSeatCount }: { initial: EventRow[]; architecturalSeatCount: number; customSeatCount: number }) {
   const [list, setList] = useState(initial);
   const [showForm, setShowForm] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -133,7 +133,7 @@ export default function EventsAdmin({ initial, venueSeatCount }: { initial: Even
 
               {form.seating_mode === "assigned" ? (
                 <div className="space-y-3 rounded-xl border border-midrash-100 bg-midrash-50 p-4">
-                  {venueSeatCount > 0 ? (
+                  {architecturalSeatCount > 0 ? (
                     <>
                       <p className="text-xs font-semibold uppercase tracking-wide text-midrash-600">Plano para este evento</p>
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -148,7 +148,19 @@ export default function EventsAdmin({ initial, venueSeatCount }: { initial: Even
                           <span className="mt-1 block text-xs leading-relaxed text-midrash-600">Usa el plano preparado en el editor para eventos con otra distribución.</span>
                         </label>
                       </div>
-                      <p className="text-xs text-midrash-500"><strong>{venueSeatCount}</strong> lugares configurados en el editor.</p>
+                      <p className="text-xs text-midrash-500">
+                        {form.seat_plan_type === "architectural" ? (
+                          <><strong>{architecturalSeatCount}</strong> sillas detectadas directamente en el archivo original.</>
+                        ) : (
+                          <><strong>{customSeatCount}</strong> lugares configurados en el editor.</>
+                        )}
+                      </p>
+                      {form.seat_plan_type === "custom" && customSeatCount === 0 ? (
+                        <p className="text-sm text-red-700">
+                          Todavía no configuraste el plano personalizado.{" "}
+                          <Link href="/admin/seats" className="underline">Configúralo aquí</Link> antes de crear este evento.
+                        </p>
+                      ) : null}
                     </>
                   ) : (
                     <p className="text-sm text-red-700">
@@ -159,7 +171,11 @@ export default function EventsAdmin({ initial, venueSeatCount }: { initial: Even
                 </div>
               ) : null}
 
-              <button type="submit" disabled={submitting || (form.seating_mode === "assigned" && venueSeatCount === 0)} className="btn-primary w-full justify-center">
+              <button
+                type="submit"
+                disabled={submitting || (form.seating_mode === "assigned" && (form.seat_plan_type === "architectural" ? architecturalSeatCount === 0 : customSeatCount === 0))}
+                className="btn-primary w-full justify-center"
+              >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear evento"}
               </button>
             </form>

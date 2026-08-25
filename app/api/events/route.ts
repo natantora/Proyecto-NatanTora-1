@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { transaction, query } from "@/lib/db";
 import { canEditEvents, type Role } from "@/lib/permissions";
 import { getVenueLayout } from "@/lib/venue-layout";
+import { ARCHITECTURAL_SEATS } from "@/lib/architectural-seat-map";
 
 type SeatingMode = "none" | "open" | "assigned";
 type SeatPlanType = "architectural" | "custom";
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
 
   let capacity: number | null = null;
   let venueLayout: Awaited<ReturnType<typeof getVenueLayout>> = { tables: [], seats: [] };
+  let eventSeats: Array<{ x: number; y: number; rotation: number; label: string | null }> = [];
 
   if (seatingMode === "open") {
     capacity = integer(body.capacity);
@@ -43,14 +45,19 @@ export async function POST(req: NextRequest) {
   }
 
   if (seatingMode === "assigned") {
-    venueLayout = await getVenueLayout();
-    if (venueLayout.seats.length === 0) {
+    if (seatPlanType === "architectural") {
+      eventSeats = ARCHITECTURAL_SEATS;
+    } else {
+      venueLayout = await getVenueLayout();
+      eventSeats = venueLayout.seats;
+    }
+    if (eventSeats.length === 0) {
       return NextResponse.json(
-        { error: "Primero configura el mapa de asientos del salón en Admin > Mapa de asientos" },
+        { error: "Primero configura el plano personalizado en Admin > Mapa de asientos" },
         { status: 400 },
       );
     }
-    capacity = venueLayout.seats.length;
+    capacity = eventSeats.length;
   }
 
   try {
@@ -74,7 +81,7 @@ export async function POST(req: NextRequest) {
       const created = inserted.rows[0];
 
       if (seatingMode === "assigned") {
-        if (venueLayout.tables.length) {
+        if (seatPlanType === "custom" && venueLayout.tables.length) {
           const tableValues: unknown[] = [];
           const tableGroups = venueLayout.tables.map((table) => {
             tableValues.push(created.id, table.kind, table.x, table.y, table.width, table.height, table.rotation, table.label);
@@ -89,7 +96,7 @@ export async function POST(req: NextRequest) {
 
         const values: unknown[] = [];
         const groups: string[] = [];
-        venueLayout.seats.forEach((seat, index) => {
+        eventSeats.forEach((seat, index) => {
           values.push(created.id, seat.label ?? String(index + 1), index + 1, seat.x, seat.y, seat.rotation);
           const offset = values.length - 5;
           groups.push(`($${offset}, $${offset + 1}, $${offset + 2}, 'available', $${offset + 3}, $${offset + 4}, $${offset + 5})`);
