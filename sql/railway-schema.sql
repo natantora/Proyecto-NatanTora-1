@@ -219,6 +219,11 @@ CREATE TABLE IF NOT EXISTS event_reservations (
 );
 CREATE INDEX IF NOT EXISTS idx_event_reservations_event ON event_reservations(event_id, created_at);
 
+-- Una misma persona puede apartar varios asientos en una sola reservación.
+-- La unicidad por asiento se conserva para impedir dobles reservaciones.
+ALTER TABLE event_reservations
+  DROP CONSTRAINT IF EXISTS event_reservations_event_id_user_id_key;
+
 -- Los eventos originales del diseño eran contenido fijo y por eso no aparecían
 -- en Administración. Esta migración los importa una sola vez a la tabla real.
 -- El marcador evita que vuelvan a crearse si un administrador los elimina.

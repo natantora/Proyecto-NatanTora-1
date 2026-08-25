@@ -6,15 +6,15 @@ import type { VenueTable } from "@/lib/venue-layout";
 import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
-type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null } | null;
+type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null };
 
-export default function EventReservationClient({ eventId, mode, planType, capacity, seats: initialSeats, venueTables, existingReservation, reservedCount }: {
+export default function EventReservationClient({ eventId, mode, planType, capacity, seats: initialSeats, venueTables, existingReservations, reservedCount }: {
   eventId: string; mode: "none" | "open" | "assigned"; planType: SeatPlanType; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
-  existingReservation: Reservation; reservedCount: number;
+  existingReservations: Reservation[]; reservedCount: number;
 }) {
   const [seats, setSeats] = useState(initialSeats);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [reservation, setReservation] = useState(existingReservation);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [reservations, setReservations] = useState(existingReservations);
   const [count, setCount] = useState(reservedCount);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -28,22 +28,34 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   async function reserve() {
     setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ seatId: selectedId }) });
+      const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds } : {}) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
-      setReservation({ id: body.reservation.id, seat_id: body.seat?.id ?? null, row_label: body.seat?.row_label ?? null, seat_number: body.seat?.seat_number ?? null, x: body.seat?.x ?? null });
-      setCount((current) => current + 1);
-      if (body.seat) setSeats((current) => current.map((seat) => seat.id === body.seat.id ? { ...seat, status: "occupied" } : seat));
+      const reservedSeats: Seat[] = body.seats ?? (body.seat ? [body.seat] : []);
+      const newReservations: Reservation[] = (body.reservations ?? (body.reservation ? [body.reservation] : [])).map((item: Reservation, index: number) => ({
+        ...item,
+        row_label: reservedSeats[index]?.row_label ?? null,
+        seat_number: reservedSeats[index]?.seat_number ?? null,
+        x: reservedSeats[index]?.x ?? null,
+      }));
+      setReservations(newReservations);
+      setCount((current) => current + Math.max(newReservations.length, 1));
+      if (reservedSeats.length) {
+        const reservedIds = new Set(reservedSeats.map((seat) => seat.id));
+        setSeats((current) => current.map((seat) => reservedIds.has(seat.id) ? { ...seat, status: "occupied" } : seat));
+      }
     } catch (caught) { setError(caught instanceof Error ? caught.message : "No fue posible reservar"); }
     finally { setLoading(false); }
   }
 
   if (mode === "none") return <div className="border border-line bg-cream-light p-6 text-sm text-ink-soft">Este evento no requiere reservar lugar.</div>;
-  if (reservation) return (
+  if (reservations.length > 0) return (
     <div className="border border-gold/40 bg-gold/10 p-7 text-center">
       <CheckCircle2 className="mx-auto h-10 w-10 text-gold-deep" />
-      <h2 className="mt-4 font-serif text-2xl font-bold text-navy">Tu lugar está reservado</h2>
-      {reservation.row_label && reservation.x !== null ? <p className="mt-2 text-ink-soft">Asiento <strong>{reservation.row_label}</strong></p> : reservation.row_label && reservation.seat_number ? <p className="mt-2 text-ink-soft">Asiento <strong>{reservation.row_label}{reservation.seat_number}</strong></p> : <p className="mt-2 text-ink-soft">Tu acceso es de lugar libre; al llegar podrás ocupar el lugar disponible que prefieras.</p>}
+      <h2 className="mt-4 font-serif text-2xl font-bold text-navy">{reservations.length > 1 ? "Tus lugares están reservados" : "Tu lugar está reservado"}</h2>
+      {mode === "assigned" ? (
+        <p className="mt-2 text-ink-soft">Asientos <strong>{reservations.map((item) => item.x !== null ? item.row_label : `${item.row_label ?? ""}${item.seat_number ?? ""}`).join(", ")}</strong></p>
+      ) : <p className="mt-2 text-ink-soft">Tu acceso es de lugar libre; al llegar podrás ocupar el lugar disponible que prefieras.</p>}
     </div>
   );
 
@@ -60,35 +72,39 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
     </div>;
   }
 
-  const selected = seats.find((seat) => seat.id === selectedId);
+  const selected = seats.filter((seat) => selectedIds.includes(seat.id));
+  const toggleSeat = (seatId: string) => setSelectedIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
+  const selectionText = selected.length > 0 ? <>Seleccionaste <strong className="text-navy">{selected.map((seat) => seat.x !== null ? seat.row_label : `${seat.row_label}${seat.seat_number}`).join(", ")}</strong></> : "Selecciona uno o varios lugares del plano";
+  const confirmText = loading ? <Loader2 className="h-4 w-4 animate-spin" /> : selectedIds.length > 1 ? `Confirmar ${selectedIds.length} asientos` : "Confirmar asiento";
 
   if (!hasMap) {
     return <div className="border border-line bg-cream-light p-4 sm:p-8">
-      <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tu asiento</h2><p className="mt-2 text-sm text-ink-soft">Los lugares oscuros ya están ocupados. Selecciona uno disponible para reservarlo.</p></div></div>
+      <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tus asientos</h2><p className="mt-2 text-sm text-ink-soft">Los lugares oscuros ya están ocupados. Selecciona todos los asientos que quieras reservar.</p></div></div>
       <div className="mx-auto my-8 max-w-2xl border border-gold/40 bg-navy py-3 text-center text-[10px] font-bold uppercase tracking-[0.3em] text-gold-light">Frente / escenario</div>
       <div className="overflow-x-auto pb-3"><div className="mx-auto min-w-max space-y-3">
         {rows.map(([rowLabel, rowSeats]) => <div key={rowLabel} className="flex items-center gap-2"><span className="w-6 text-center text-xs font-bold text-ink-muted">{rowLabel}</span>{rowSeats.map((seat) => {
-          const occupied = seat.status === "occupied"; const isSelected = selectedId === seat.id;
-          return <button key={seat.id} type="button" disabled={occupied} onClick={() => setSelectedId(seat.id)} aria-label={`Asiento ${seat.row_label}${seat.seat_number}${occupied ? ", ocupado" : ""}`} className={`h-10 w-10 rounded-t-lg border text-xs font-bold transition-colors ${occupied ? "cursor-not-allowed border-navy bg-navy text-cream/45" : isSelected ? "border-gold-deep bg-gold text-navy" : "border-gold/50 bg-white text-navy hover:bg-gold/15"}`}>{seat.seat_number}</button>;
+          const occupied = seat.status === "occupied"; const isSelected = selectedIds.includes(seat.id);
+          return <button key={seat.id} type="button" disabled={occupied} onClick={() => toggleSeat(seat.id)} aria-pressed={isSelected} aria-label={`Asiento ${seat.row_label}${seat.seat_number}${occupied ? ", ocupado" : isSelected ? ", seleccionado" : ", disponible"}`} className={`h-10 w-10 rounded-t-lg border text-xs font-bold transition-colors ${occupied ? "cursor-not-allowed border-navy bg-navy text-cream/45" : isSelected ? "border-gold-deep bg-gold text-navy" : "border-gold/50 bg-white text-navy hover:bg-gold/15"}`}>{seat.seat_number}</button>;
         })}</div>)}
       </div></div>
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
-      <div className="mt-6 flex flex-col items-stretch justify-between gap-4 border-t border-line pt-5 sm:flex-row sm:items-center"><p className="text-sm text-ink-soft">{selected ? <>Seleccionaste <strong className="text-navy">{selected.row_label}{selected.seat_number}</strong></> : "Selecciona un lugar del plano"}</p><button onClick={reserve} disabled={loading || !selectedId} className="btn-primary justify-center">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar asiento"}</button></div>
+      <div className="mt-6 flex flex-col items-stretch justify-between gap-4 border-t border-line pt-5 sm:flex-row sm:items-center"><p className="text-sm text-ink-soft">{selectionText}</p><button onClick={reserve} disabled={loading || selectedIds.length === 0} className="btn-primary justify-center">{confirmText}</button></div>
     </div>;
   }
 
   return <div className="border border-line bg-cream-light p-4 sm:p-8">
-    <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tu asiento</h2><p className="mt-2 text-sm text-ink-soft">{planType === "architectural" ? "Toca directamente la silla que quieres en el plano original. Las sillas ocupadas aparecen marcadas." : "Selecciona un lugar en el plano preparado para este evento."}</p></div></div>
+    <div className="flex items-start gap-4"><Armchair className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Elige tus asientos</h2><p className="mt-2 text-sm text-ink-soft">{planType === "architectural" ? "Toca directamente todas las sillas que quieres en el plano original. Vuelve a tocar una silla para quitarla de tu selección." : "Selecciona uno o varios lugares en el plano preparado para este evento."}</p></div></div>
     <div className="my-6">
       <InteractiveSeatPlan
         seats={seats}
         venueTables={venueTables}
-        selectedSeatId={selectedId}
-        onSelect={setSelectedId}
+        selectedSeatId={null}
+        selectedSeatIds={selectedIds}
+        onSelect={toggleSeat}
         planType={planType}
       />
     </div>
     {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
-    <div className="mt-6 flex flex-col items-stretch justify-between gap-4 border-t border-line pt-5 sm:flex-row sm:items-center"><p className="text-sm text-ink-soft">{selected ? <>Seleccionaste <strong className="text-navy">{selected.row_label}</strong></> : "Selecciona un lugar del plano"}</p><button onClick={reserve} disabled={loading || !selectedId} className="btn-primary justify-center">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar asiento"}</button></div>
+    <div className="mt-6 flex flex-col items-stretch justify-between gap-4 border-t border-line pt-5 sm:flex-row sm:items-center"><p className="text-sm text-ink-soft">{selectionText}</p><button onClick={reserve} disabled={loading || selectedIds.length === 0} className="btn-primary justify-center">{confirmText}</button></div>
   </div>;
 }
