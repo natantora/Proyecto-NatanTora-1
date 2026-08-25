@@ -296,11 +296,32 @@ CREATE TABLE IF NOT EXISTS schedules (
   description TEXT,
   days TEXT,
   time TEXT,
+  time_mode TEXT NOT NULL DEFAULT 'fixed',
+  offset_minutes INT NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
   icon TEXT,
   position INT DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (kind, name)
 );
+
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS time_mode TEXT NOT NULL DEFAULT 'fixed';
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS offset_minutes INT NOT NULL DEFAULT 0;
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'schedules_time_mode_check') THEN
+    ALTER TABLE schedules ADD CONSTRAINT schedules_time_mode_check
+      CHECK (time_mode IN ('fixed', 'before_sunset', 'after_sunset'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'schedules_offset_minutes_check') THEN
+    ALTER TABLE schedules ADD CONSTRAINT schedules_offset_minutes_check
+      CHECK (offset_minutes BETWEEN -240 AND 240);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS shabat_config (
   id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -355,10 +376,31 @@ CREATE TABLE IF NOT EXISTS approval_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_approval_tokens_user ON approval_tokens(user_id);
 
-INSERT INTO schedules (kind, name, description, days, time, icon, position) VALUES
-  ('rezo', 'Shajarit', 'Rezo de la manana', 'Domingo a Viernes', '7:00 AM', '🕐', 1),
-  ('rezo', 'Minha', 'Rezo de la tarde', 'Domingo a Jueves', '1:30 PM', '☀️', 2),
-  ('rezo', 'Arvit', 'Rezo de la noche', 'Domingo a Jueves', '7:30 PM', '🌙', 3),
+INSERT INTO schedules (kind, name, description, days, time, time_mode, offset_minutes, active, icon, position) VALUES
+  ('rezo', 'Shajarit', 'Primer minyán', 'Lunes a Viernes', '07:00', 'fixed', 0, TRUE, '🕐', 1),
+  ('rezo', 'Minha', 'Rezo de la tarde', 'Domingo a Jueves', '13:30', 'fixed', 0, TRUE, '☀️', 4),
+  ('rezo', 'Arvit', 'Horario calculado diariamente', 'Domingo a Jueves', NULL, 'before_sunset', -15, TRUE, '🌙', 5),
   ('clase', 'Halaja Diaria', 'Clase de Shuljan HaMelej con el Rab', 'Domingo a Jueves', '8:00 AM', '📖', 10),
   ('clase', 'Parashat Hashavua', 'Estudio semanal de la porcion de Tora', 'Miercoles', '9:00 PM', '📜', 11)
 ON CONFLICT DO NOTHING;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_migrations WHERE key = '2026-08-admin-schedules') THEN
+    UPDATE schedules SET days = 'Lunes a Viernes', time = '07:00', time_mode = 'fixed', offset_minutes = 0,
+      description = 'Primer minyán', active = TRUE, position = 1, updated_at = NOW()
+      WHERE kind = 'rezo' AND name = 'Shajarit';
+    UPDATE schedules SET days = 'Domingo a Jueves', time = '13:30', time_mode = 'fixed', offset_minutes = 0,
+      active = TRUE, position = 4, updated_at = NOW()
+      WHERE kind = 'rezo' AND name = 'Minha';
+    UPDATE schedules SET days = 'Domingo a Jueves', time = NULL, time_mode = 'before_sunset', offset_minutes = -15,
+      description = 'Horario calculado diariamente', active = TRUE, position = 5, updated_at = NOW()
+      WHERE kind = 'rezo' AND name = 'Arvit';
+    INSERT INTO schedules (kind, name, description, days, time, position) VALUES
+      ('rezo', 'Shajarit · 2.º minyán', 'Segundo minyán', 'Lunes a Viernes', '08:00', 2),
+      ('rezo', 'Shajarit · Domingo', 'Minyán de domingo', 'Domingo', '08:00', 0),
+      ('rezo', 'Shajarit · Shabat', 'Minyán de Shabat', 'Shabat', '08:30', 3)
+    ON CONFLICT (kind, name) DO NOTHING;
+    INSERT INTO app_migrations (key) VALUES ('2026-08-admin-schedules');
+  END IF;
+END $$;
