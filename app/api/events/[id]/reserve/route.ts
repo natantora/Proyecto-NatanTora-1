@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { transaction } from "@/lib/db";
 import { clientIp, isRateLimited } from "@/lib/rate-limit";
 
-type EventRecord = { id: string; seating_mode: "none" | "open" | "assigned"; capacity: number | null };
+type EventRecord = { id: string; seating_mode: "none" | "open" | "assigned"; capacity: number | null; published: boolean; reservations_open: boolean; seat_price: string | number };
 
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   if (isRateLimited(`reserve:${clientIp(req)}`, 20, 10 * 60 * 1000)) {
@@ -16,10 +16,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
   try {
     const result = await transaction(async (client) => {
-      const eventResult = await client.query<EventRecord>("SELECT id, seating_mode, capacity FROM events WHERE id = $1 FOR UPDATE", [eventId]);
+      const eventResult = await client.query<EventRecord>("SELECT id, seating_mode, capacity, published, reservations_open, seat_price FROM events WHERE id = $1 FOR UPDATE", [eventId]);
       const event = eventResult.rows[0];
       if (!event) throw new Error("EVENT_NOT_FOUND");
       if (event.seating_mode === "none") throw new Error("NO_RESERVATIONS");
+      if (!event.published || !event.reservations_open) throw new Error("RESERVATIONS_CLOSED");
       const existing = await client.query("SELECT id FROM event_reservations WHERE event_id = $1 AND user_id = $2 LIMIT 1", [eventId, user.id]);
       if (existing.rowCount) throw new Error("ALREADY_RESERVED");
 
@@ -42,17 +43,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
       const reservation = seats.length
         ? await client.query<{ id: string; event_id: string; seat_id: string | null; created_at: Date }>(
-          `INSERT INTO event_reservations (event_id, user_id, seat_id, holder_name, holder_email, holder_phone)
-           SELECT $1, $2, selected_seat_id, $4, $5, $6
+          `INSERT INTO event_reservations (event_id, user_id, seat_id, holder_name, holder_email, holder_phone, unit_price)
+           SELECT $1, $2, selected_seat_id, $4, $5, $6, $7
              FROM unnest($3::uuid[]) AS selected_seat_id
            RETURNING id, event_id, seat_id, created_at`,
-          [eventId, user.id, seats.map((seat) => seat.id), user.full_name || user.email, user.email, user.phone],
+          [eventId, user.id, seats.map((seat) => seat.id), user.full_name || user.email, user.email, user.phone, Number(event.seat_price ?? 0)],
         )
         : await client.query<{ id: string; event_id: string; seat_id: string | null; created_at: Date }>(
-          `INSERT INTO event_reservations (event_id, user_id, seat_id, holder_name, holder_email, holder_phone)
-           VALUES ($1, $2, NULL, $3, $4, $5)
+          `INSERT INTO event_reservations (event_id, user_id, seat_id, holder_name, holder_email, holder_phone, unit_price)
+           VALUES ($1, $2, NULL, $3, $4, $5, $6)
            RETURNING id, event_id, seat_id, created_at`,
-          [eventId, user.id, user.full_name || user.email, user.email, user.phone],
+          [eventId, user.id, user.full_name || user.email, user.email, user.phone, Number(event.seat_price ?? 0)],
         );
       if (seats.length) await client.query("UPDATE event_seats SET status = 'occupied' WHERE id = ANY($1::uuid[])", [seats.map((seat) => seat.id)]);
       const reservationBySeat = new Map(reservation.rows.map((item) => [item.seat_id, item]));
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const message = error instanceof Error ? error.message : "";
     const responses: Record<string, [string, number]> = {
       EVENT_NOT_FOUND: ["Evento no encontrado", 404], NO_RESERVATIONS: ["Este evento no requiere reservación", 400],
+      RESERVATIONS_CLOSED: ["Las reservaciones todavía no están abiertas", 409],
       ALREADY_RESERVED: ["Ya tienes una reservación en este evento", 409], SOLD_OUT: ["Ya no hay lugares disponibles", 409],
       SEAT_REQUIRED: ["Selecciona al menos un asiento", 400], SEAT_UNAVAILABLE: ["Uno de esos asientos acaba de ser ocupado. Revisa tu selección.", 409],
     };

@@ -17,6 +17,8 @@ type EventRow = {
   location: string | null;
   seating_mode: "none" | "open" | "assigned";
   capacity: number | null;
+  reservations_open: boolean;
+  seat_price: number | string;
 };
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", {
@@ -38,7 +40,8 @@ export default async function Eventos() {
   const isLoggedIn = !!user;
   const { data, error } = await db
     .from("events")
-    .select("id,title,description,event_date,location,seating_mode,capacity")
+    .select("id,title,description,event_date,location,seating_mode,capacity,reservations_open,seat_price")
+    .eq("published", true)
     .order("event_date", { ascending: true });
 
   const now = new Date();
@@ -102,9 +105,9 @@ export default async function Eventos() {
                   const month = parts.find((part) => part.type === "month")?.value;
                   const year = parts.find((part) => part.type === "year")?.value;
                   const action = event.seating_mode === "assigned"
-                    ? "Elegir lugar"
+                    ? event.reservations_open ? "Elegir lugar" : "Próximamente"
                     : event.seating_mode === "open"
-                      ? "Reservar"
+                      ? event.reservations_open ? "Reservar" : "Próximamente"
                       : "Ver evento";
                   return (
                     <li
@@ -134,15 +137,20 @@ export default async function Eventos() {
                         {event.seating_mode !== "none" ? (
                           <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/55">
                             {event.seating_mode === "assigned" ? "Selección en plano" : "Lugar libre"} · {event.capacity} lugares
+                            {Number(event.seat_price) > 0 ? ` · $${Number(event.seat_price).toLocaleString("es-MX")} MXN` : " · Gratuito"}
                           </p>
                         ) : null}
                       </div>
-                      <Link
-                        href={isLoggedIn ? `/eventos/${event.id}` : "/auth/login"}
-                        className="text-[11px] tracking-[0.2em] uppercase text-gold-light border border-gold/40 px-5 py-3 hover:bg-gold hover:text-navy-deep hover:border-gold transition-colors whitespace-nowrap"
-                      >
-                        {isLoggedIn ? action : "Inscribirme"}
-                      </Link>
+                      {event.seating_mode !== "none" && !event.reservations_open ? (
+                        <span className="cursor-not-allowed whitespace-nowrap border border-cream/20 px-5 py-3 text-[11px] uppercase tracking-[0.2em] text-cream/40">{action}</span>
+                      ) : (
+                        <Link
+                          href={isLoggedIn ? `/eventos/${event.id}` : "/auth/login"}
+                          className="text-[11px] tracking-[0.2em] uppercase text-gold-light border border-gold/40 px-5 py-3 hover:bg-gold hover:text-navy-deep hover:border-gold transition-colors whitespace-nowrap"
+                        >
+                          {isLoggedIn ? action : "Inscribirme"}
+                        </Link>
+                      )}
                     </li>
                   );
                 })}

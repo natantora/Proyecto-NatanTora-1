@@ -80,6 +80,11 @@ export default async function AdminLayout({
       show: canEditEvents(role),
     },
     {
+      href: "/admin/reservations",
+      label: "Reservaciones",
+      show: canManageSeats(role),
+    },
+    {
       href: "/admin/seats",
       label: "Mapa de asientos",
       show: canManageSeats(role),

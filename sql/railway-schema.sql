@@ -91,12 +91,26 @@ CREATE TABLE IF NOT EXISTS events (
   seating_mode TEXT NOT NULL DEFAULT 'none',
   seat_plan_type TEXT NOT NULL DEFAULT 'architectural',
   capacity INT,
+  seat_price NUMERIC(10,2) NOT NULL DEFAULT 0,
+  published BOOLEAN NOT NULL DEFAULT FALSE,
+  published_at TIMESTAMPTZ,
+  reservations_open BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE events ADD COLUMN IF NOT EXISTS seating_mode TEXT NOT NULL DEFAULT 'none';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS seat_plan_type TEXT NOT NULL DEFAULT 'architectural';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS capacity INT;
+-- Los eventos existentes ya estaban visibles y reservables. Al agregar estas
+-- columnas se conserva su comportamiento; los eventos nuevos usan los defaults
+-- de borrador/cerrado definidos inmediatamente después.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS seat_price NUMERIC(10,2) NOT NULL DEFAULT 0;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS reservations_open BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE events ALTER COLUMN published SET DEFAULT FALSE;
+ALTER TABLE events ALTER COLUMN reservations_open SET DEFAULT FALSE;
+UPDATE events SET published_at = COALESCE(published_at, created_at) WHERE published = TRUE;
 
 DO $$
 BEGIN
@@ -111,6 +125,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'events_seat_plan_type_check') THEN
     ALTER TABLE events ADD CONSTRAINT events_seat_plan_type_check
       CHECK (seat_plan_type IN ('architectural', 'custom'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'events_seat_price_check') THEN
+    ALTER TABLE events ADD CONSTRAINT events_seat_price_check
+      CHECK (seat_price >= 0);
   END IF;
 END $$;
 
@@ -213,11 +231,13 @@ CREATE TABLE IF NOT EXISTS event_reservations (
   holder_name TEXT NOT NULL,
   holder_email TEXT NOT NULL,
   holder_phone TEXT,
+  unit_price NUMERIC(10,2) NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (event_id, user_id),
   UNIQUE (event_id, seat_id)
 );
 CREATE INDEX IF NOT EXISTS idx_event_reservations_event ON event_reservations(event_id, created_at);
+ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS unit_price NUMERIC(10,2) NOT NULL DEFAULT 0;
 
 -- Una misma persona puede apartar varios asientos en una sola reservación.
 -- La unicidad por asiento se conserva para impedir dobles reservaciones.
