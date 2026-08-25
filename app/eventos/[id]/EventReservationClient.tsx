@@ -8,9 +8,9 @@ import InteractiveSeatPlan, { type SeatPlanType } from "@/components/Interactive
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null };
 
-export default function EventReservationClient({ eventId, mode, planType, capacity, seats: initialSeats, venueTables, existingReservations, reservedCount }: {
+export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, reservedCount }: {
   eventId: string; mode: "none" | "open" | "assigned"; planType: SeatPlanType; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
-  existingReservations: Reservation[]; reservedCount: number;
+  seatPrice: number; reservationsOpen: boolean; existingReservations: Reservation[]; reservedCount: number;
 }) {
   const [seats, setSeats] = useState(initialSeats);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -54,8 +54,15 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
       <CheckCircle2 className="mx-auto h-10 w-10 text-gold-deep" />
       <h2 className="mt-4 font-serif text-2xl font-bold text-navy">{reservations.length > 1 ? "Tus lugares están reservados" : "Tu lugar está reservado"}</h2>
       {mode === "assigned" ? (
-        <p className="mt-2 text-ink-soft">Asientos <strong>{reservations.map((item) => item.x !== null ? item.row_label : `${item.row_label ?? ""}${item.seat_number ?? ""}`).join(", ")}</strong></p>
+        <><p className="mt-2 text-ink-soft">Asientos <strong>{reservations.map((item) => item.x !== null ? item.row_label : `${item.row_label ?? ""}${item.seat_number ?? ""}`).join(", ")}</strong></p>{seatPrice > 0 ? <p className="mt-2 text-sm font-semibold text-navy">Total: ${(seatPrice * reservations.length).toLocaleString("es-MX")} MXN</p> : null}</>
       ) : <p className="mt-2 text-ink-soft">Tu acceso es de lugar libre; al llegar podrás ocupar el lugar disponible que prefieras.</p>}
+    </div>
+  );
+
+  if (!reservationsOpen) return (
+    <div className="border border-gold/35 bg-gold/10 p-7 text-center">
+      <h2 className="font-serif text-2xl font-bold text-navy">Reservaciones cerradas</h2>
+      <p className="mt-2 text-sm text-ink-soft">El evento ya está publicado, pero el administrador todavía no ha abierto la selección de lugares.</p>
     </div>
   );
 
@@ -80,7 +87,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   const reservationControls = (
     <div className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-gold/30 bg-cream-light/95 px-4 py-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(10,29,54,.16)] backdrop-blur sm:static sm:mt-6 sm:flex sm:justify-between sm:border-line sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-5 sm:shadow-none" aria-live="polite">
       <p className="min-w-0 text-sm text-ink-soft">
-        {selected.length > 0 ? <><strong className="block text-navy sm:inline">{selected.length} {selected.length === 1 ? "asiento" : "asientos"}</strong><span className="block truncate sm:ml-1 sm:inline">{compactNames}</span></> : "Selecciona uno o varios lugares"}
+        {selected.length > 0 ? <><strong className="block text-navy sm:inline">{selected.length} {selected.length === 1 ? "asiento" : "asientos"}</strong><span className="block truncate sm:ml-1 sm:inline">{compactNames}{seatPrice > 0 ? ` · $${(seatPrice * selected.length).toLocaleString("es-MX")} MXN` : ""}</span></> : "Selecciona uno o varios lugares"}
       </p>
       <button onClick={reserve} disabled={loading || selectedIds.length === 0} className="btn-primary min-h-11 shrink-0 justify-center px-4">{confirmText}</button>
     </div>

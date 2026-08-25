@@ -15,7 +15,7 @@ export default async function AdminEventsPage() {
     <div className="space-y-6">
       <h1 className="font-serif text-3xl font-bold text-midrash-900">Eventos</h1>
       <p className="text-sm text-midrash-600">
-        Los eventos de esta lista son los mismos que aparecen en la página pública.
+        Flujo: crea el borrador, publícalo cuando esté listo y después abre las reservaciones.
       </p>
       {error ? (
         <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

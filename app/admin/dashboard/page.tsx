@@ -9,20 +9,25 @@ export default async function AdminDashboard() {
   const [members, reservations, events, classes, payments] = await Promise.all([
     supabase.from("profiles").select("id, status", { count: "exact" }),
     supabase.from("event_reservations").select("id", { count: "exact" }),
-    supabase.from("events").select("id", { count: "exact" }),
+    supabase.from("events").select("id, published", { count: "exact" }),
     supabase.from("classes").select("id, published", { count: "exact" }),
     supabase.from("payments").select("amount, status").eq("status", "paid"),
   ]);
+  const memberRows = (members.data ?? []) as Array<{ status: string }>;
+  const classRows = (classes.data ?? []) as Array<{ published: boolean }>;
+  const eventRows = (events.data ?? []) as Array<{ published: boolean }>;
+  const paymentRows = (payments.data ?? []) as Array<{ amount: number | string | null }>;
   const totalMembers = members.count ?? 0;
-  const pendingMembers = members.data?.filter((m: any) => m.status === "pending").length ?? 0;
-  const publishedClasses = classes.data?.filter((c: any) => c.published).length ?? 0;
+  const pendingMembers = memberRows.filter((member) => member.status === "pending").length;
+  const publishedClasses = classRows.filter((item) => item.published).length;
   const totalClasses = classes.count ?? 0;
-  const totalRevenue = payments.data?.reduce((sum: number, p: any) => sum + Number(p.amount ?? 0), 0) ?? 0;
+  const publishedEvents = eventRows.filter((event) => event.published).length;
+  const totalRevenue = paymentRows.reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0);
   const cards = [
     { label: "Miembros", value: totalMembers, sub: `${pendingMembers} pendientes de aprobación`, icon: Users, color: "bg-midrash-100 text-midrash-800" },
-    { label: "Reservaciones", value: reservations.count ?? 0, sub: `${events.count ?? 0} eventos publicados`, icon: CalendarDays, color: "bg-gold-100 text-gold-800" },
+    { label: "Reservaciones", value: reservations.count ?? 0, sub: `${publishedEvents} publicados · ${(events.count ?? 0) - publishedEvents} borradores`, icon: CalendarDays, color: "bg-gold-100 text-gold-800" },
     { label: "Clases publicadas", value: publishedClasses, sub: `${totalClasses - publishedClasses} en borrador`, icon: BookOpen, color: "bg-green-100 text-green-800" },
-    { label: "Ingresos totales", value: formatMXN(totalRevenue), sub: `${payments.data?.length ?? 0} pagos exitosos`, icon: HandCoins, color: "bg-purple-100 text-purple-800" },
+    { label: "Ingresos totales", value: formatMXN(totalRevenue), sub: `${paymentRows.length} pagos exitosos`, icon: HandCoins, color: "bg-purple-100 text-purple-800" },
   ];
   return (
     <div className="space-y-6">

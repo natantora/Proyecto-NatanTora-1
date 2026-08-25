@@ -8,7 +8,7 @@ import EventSeatsAdmin from "./EventSeatsAdmin";
 
 export const dynamic = "force-dynamic";
 
-type EventRecord = { id: string; title: string; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; seat_plan_type: "architectural" | "custom"; capacity: number | null };
+type EventRecord = { id: string; title: string; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; seat_plan_type: "architectural" | "custom"; capacity: number | null; seat_price: string | number; published: boolean; reservations_open: boolean };
 type SeatRow = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type ReservationRow = { id: string; seat_id: string | null; holder_name: string; holder_email: string; holder_phone: string | null; created_at: string };
 
@@ -18,7 +18,7 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
   const canViewReservations = canManageSeats(user.role as Role);
 
   const { id } = await params;
-  const eventResult = await query<EventRecord>("SELECT id, title, event_date, location, seating_mode, seat_plan_type, capacity FROM events WHERE id = $1 LIMIT 1", [id]);
+  const eventResult = await query<EventRecord>("SELECT id, title, event_date, location, seating_mode, seat_plan_type, capacity, seat_price, published, reservations_open FROM events WHERE id = $1 LIMIT 1", [id]);
   const event = eventResult.rows[0];
   if (!event) notFound();
 
@@ -44,6 +44,7 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
         <p className="mt-1 text-sm text-midrash-600">
           {new Date(event.event_date).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" })} · {event.location || "Midrash Natán Torá"}
         </p>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold"><span className={`rounded-full px-3 py-1 ${event.published ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"}`}>{event.published ? "Publicado" : "Borrador"}</span>{event.seating_mode !== "none" ? <span className={`rounded-full px-3 py-1 ${event.reservations_open ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{event.reservations_open ? "Reservaciones abiertas" : "Reservaciones cerradas"}</span> : null}{event.seating_mode === "assigned" ? <span className="rounded-full bg-gold/15 px-3 py-1 text-gold-deep">{Number(event.seat_price) > 0 ? `$${Number(event.seat_price).toLocaleString("es-MX")} MXN por asiento` : "Gratuito"}</span> : null}</div>
       </div>
       <EventSeatsAdmin
         seatingMode={event.seating_mode}

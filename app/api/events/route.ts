@@ -18,6 +18,11 @@ function integer(value: unknown) {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+function money(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1_000_000 ? Math.round(parsed * 100) / 100 : null;
+}
+
 export async function POST(req: NextRequest) {
   if (!(await isAuthorized())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -28,9 +33,13 @@ export async function POST(req: NextRequest) {
     ? body.seating_mode
     : "none";
   const seatPlanType: SeatPlanType = body.seat_plan_type === "custom" ? "custom" : "architectural";
+  const seatPrice = seatingMode !== "none" ? money(body.seat_price) : 0;
 
   if (!title || Number.isNaN(eventDate.getTime())) {
     return NextResponse.json({ error: "Título y fecha son obligatorios" }, { status: 400 });
+  }
+  if (seatingMode !== "none" && seatPrice === null) {
+    return NextResponse.json({ error: "El precio por asiento debe ser un importe válido" }, { status: 400 });
   }
 
   let capacity: number | null = null;
@@ -64,8 +73,8 @@ export async function POST(req: NextRequest) {
     const event = await transaction(async (client) => {
       const inserted = await client.query(
         `INSERT INTO events
-          (title, description, event_date, location, image_url, seating_mode, seat_plan_type, capacity)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          (title, description, event_date, location, image_url, seating_mode, seat_plan_type, capacity, seat_price, published, reservations_open)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, FALSE, FALSE)
          RETURNING *`,
         [
           title,
@@ -76,6 +85,7 @@ export async function POST(req: NextRequest) {
           seatingMode,
           seatPlanType,
           capacity,
+          seatPrice ?? 0,
         ],
       );
       const created = inserted.rows[0];
@@ -121,6 +131,30 @@ export async function PATCH(req: NextRequest) {
   if (!(await isAuthorized())) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const body = await req.json().catch(() => ({}));
   if (!body.id) return NextResponse.json({ error: "ID requerido" }, { status: 400 });
+
+  if (body.action === "publish") {
+    const result = await query(
+      "UPDATE events SET published = TRUE, published_at = COALESCE(published_at, NOW()) WHERE id = $1 RETURNING *",
+      [body.id],
+    );
+    if (!result.rows[0]) return NextResponse.json({ error: "Evento no encontrado" }, { status: 404 });
+    return NextResponse.json({ ok: true, event: result.rows[0] });
+  }
+
+  if (body.action === "open_reservations") {
+    const result = await query(
+      "UPDATE events SET reservations_open = TRUE WHERE id = $1 AND published = TRUE AND seating_mode <> 'none' RETURNING *",
+      [body.id],
+    );
+    if (!result.rows[0]) return NextResponse.json({ error: "Primero publica el evento y confirma que requiere reservaciones" }, { status: 409 });
+    return NextResponse.json({ ok: true, event: result.rows[0] });
+  }
+
+  if (body.action === "close_reservations") {
+    const result = await query("UPDATE events SET reservations_open = FALSE WHERE id = $1 RETURNING *", [body.id]);
+    if (!result.rows[0]) return NextResponse.json({ error: "Evento no encontrado" }, { status: 404 });
+    return NextResponse.json({ ok: true, event: result.rows[0] });
+  }
 
   const allowed = ["title", "description", "event_date", "location", "image_url"] as const;
   const entries = allowed.filter((key) => body[key] !== undefined).map((key) => [key, body[key]] as const);
