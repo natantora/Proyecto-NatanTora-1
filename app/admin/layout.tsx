@@ -8,6 +8,7 @@ import {
   canEditGallery,
   canEditHorarios,
   canManagePayments,
+  canManageBilling,
   canManageMembers,
   canManageSeats,
   canReviewClasses,
@@ -99,6 +100,11 @@ export default async function AdminLayout({
       href: "/admin/gallery",
       label: "Galería",
       show: canEditGallery(role),
+    },
+    {
+      href: "/admin/accounts",
+      label: "Estados de cuenta",
+      show: canManageBilling(role),
     },
     {
       href: "/admin/payments",

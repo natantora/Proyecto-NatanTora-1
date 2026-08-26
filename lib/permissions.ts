@@ -88,6 +88,11 @@ export function canManagePayments(role: Role | null | undefined): boolean {
   return role === "admin" || role === "owner";
 }
 
+/** Importar, crear y conciliar estados de cuenta */
+export function canManageBilling(role: Role | null | undefined): boolean {
+  return role === "admin" || role === "owner";
+}
+
 /** Aprobar/rechazar miembros nuevos */
 export function canManageMembers(role: Role | null | undefined): boolean {
   return role === "admin" || role === "owner";

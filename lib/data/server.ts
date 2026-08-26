@@ -5,6 +5,8 @@ const TABLES = new Set([
   "profiles", "sessions", "seats", "classes", "events", "schedules",
   "shabat_config", "payments", "seat_holidays", "approval_tokens", "oauth_accounts",
   "event_seats", "event_reservations",
+  "billing_accounts", "billing_account_members", "billing_imports", "billing_charges",
+  "billing_payment_allocations",
 ]);
 
 type Filter = { column: string; op: "=" | "IS" | ">=" | "IN"; value: unknown };

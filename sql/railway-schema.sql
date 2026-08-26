@@ -354,6 +354,89 @@ CREATE TABLE IF NOT EXISTS payments (
   paid_at TIMESTAMPTZ
 );
 
+-- Estados de cuenta privados. Una cuenta puede existir antes de que la
+-- persona se registre en la pagina y vincularse despues a uno o varios
+-- perfiles (por ejemplo, una cuenta familiar).
+CREATE TABLE IF NOT EXISTS billing_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  display_name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  external_reference TEXT,
+  notes TEXT,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_accounts_external_reference
+  ON billing_accounts(LOWER(external_reference)) WHERE external_reference IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_billing_accounts_email
+  ON billing_accounts(LOWER(email)) WHERE email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS billing_account_members (
+  account_id UUID NOT NULL REFERENCES billing_accounts(id) ON DELETE CASCADE,
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  relationship TEXT NOT NULL DEFAULT 'titular',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (account_id, profile_id),
+  UNIQUE (profile_id)
+);
+CREATE INDEX IF NOT EXISTS idx_billing_account_members_profile
+  ON billing_account_members(profile_id);
+
+CREATE TABLE IF NOT EXISTS billing_imports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  filename TEXT NOT NULL,
+  imported_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  total_rows INT NOT NULL DEFAULT 0,
+  imported_rows INT NOT NULL DEFAULT 0,
+  duplicate_rows INT NOT NULL DEFAULT 0,
+  error_rows INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS billing_charges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id UUID NOT NULL REFERENCES billing_accounts(id) ON DELETE CASCADE,
+  import_id UUID REFERENCES billing_imports(id) ON DELETE SET NULL,
+  external_reference TEXT NOT NULL,
+  concept TEXT NOT NULL,
+  period TEXT,
+  original_amount NUMERIC(12,2) NOT NULL CHECK (original_amount > 0),
+  outstanding_amount NUMERIC(12,2) NOT NULL CHECK (outstanding_amount >= 0),
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open','paid','waived')),
+  source TEXT NOT NULL DEFAULT 'manual'
+    CHECK (source IN ('excel','manual','adjustment')),
+  due_date DATE,
+  notes TEXT,
+  created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (account_id, external_reference)
+);
+CREATE INDEX IF NOT EXISTS idx_billing_charges_account
+  ON billing_charges(account_id, status, due_date, created_at);
+
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS billing_account_id UUID REFERENCES billing_accounts(id) ON DELETE SET NULL;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS billing_applied_at TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_stripe_session
+  ON payments(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_payments_billing_account
+  ON payments(billing_account_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS billing_payment_allocations (
+  payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+  charge_id UUID NOT NULL REFERENCES billing_charges(id) ON DELETE RESTRICT,
+  amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (payment_id, charge_id)
+);
+CREATE INDEX IF NOT EXISTS idx_billing_payment_allocations_charge
+  ON billing_payment_allocations(charge_id);
+
 CREATE TABLE IF NOT EXISTS seat_holidays (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   slug TEXT NOT NULL UNIQUE,

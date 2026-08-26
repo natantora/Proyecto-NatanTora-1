@@ -78,6 +78,11 @@ export default function HeaderClient({ isLoggedIn, approved, isAdmin, userName }
                 Donar
               </Link>
             )}
+            {isLoggedIn && approved && (
+              <Link href="/mi-cuenta" className="text-[11px] font-semibold tracking-[0.22em] uppercase text-gold-light hover:text-gold transition-colors">
+                Mi saldo
+              </Link>
+            )}
           </nav>
         )}
 
@@ -161,6 +166,11 @@ export default function HeaderClient({ isLoggedIn, approved, isAdmin, userName }
                 className="mt-4 bg-gold text-navy-deep px-5 py-3.5 text-[11px] tracking-[0.22em] uppercase font-bold text-center hover:bg-gold-light transition-colors duration-base ease-out-quart"
               >
                 Donar
+              </Link>
+            )}
+            {isLoggedIn && approved && (
+              <Link href="/mi-cuenta" onClick={() => setOpen(false)} className="mt-2 border border-gold/60 text-gold-light px-5 py-3.5 text-[11px] tracking-[0.22em] uppercase font-bold text-center">
+                Mi estado de cuenta
               </Link>
             )}
             {isAdmin && (
