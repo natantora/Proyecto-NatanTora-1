@@ -189,6 +189,11 @@ type PaymentReceiptEmailParams = {
   paidAt?: Date | string;
 };
 
+type PasswordResetEmailParams = {
+  memberName: string;
+  resetUrl: string;
+};
+
 function transactionalEmail(params: {
   preview: string;
   eyebrow: string;
@@ -284,5 +289,16 @@ export function paymentReceiptEmail(p: PaymentReceiptEmailParams): string {
     ],
     buttonLabel: "Ver mi estado de cuenta",
     buttonUrl: p.accountUrl,
+  });
+}
+
+export function passwordResetEmail(p: PasswordResetEmailParams): string {
+  return transactionalEmail({
+    preview: "Restablece tu contraseña de Natán Torá",
+    eyebrow: "Seguridad de tu cuenta",
+    title: "Restablece tu contraseña",
+    body: `Hola, ${escapeHtml(p.memberName)}. Recibimos una solicitud para cambiar la contraseña de tu cuenta. Este enlace es personal, solo puede utilizarse una vez y vencerá en 30 minutos.<br><br>Si tú no solicitaste este cambio, puedes ignorar este correo; tu contraseña seguirá siendo la misma.`,
+    buttonLabel: "Crear contraseña nueva",
+    buttonUrl: p.resetUrl,
   });
 }

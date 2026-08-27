@@ -117,9 +117,10 @@ function LoginForm() {
               />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-ink uppercase tracking-[0.2em] mb-2">
-                Contraseña
-              </label>
+              <div className="mb-2 flex items-center justify-between gap-4">
+                <label className="block text-[11px] font-bold text-ink uppercase tracking-[0.2em]">Contraseña</label>
+                <Link href="/auth/recuperar" className="text-[11px] font-bold text-gold hover:underline">¿La olvidaste?</Link>
+              </div>
               <input
                 required
                 type="password"
