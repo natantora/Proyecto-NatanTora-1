@@ -12,11 +12,8 @@ interface NotifyParams {
 }
 
 function getSiteUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_VERCEL_URL ||
-    "https://natantora.com"
-  );
+  if (process.env.NODE_ENV === "production") return "https://natantora.com";
+  return (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
 /**

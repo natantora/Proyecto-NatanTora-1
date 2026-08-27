@@ -1,4 +1,10 @@
 import { createAdminClient } from "@/lib/data/server";
+import { transaction } from "@/lib/db";
+import {
+  ensureMemberStatusAuditSchemaWithClient,
+  recordMemberStatusChange,
+  type MemberStatus,
+} from "@/lib/member-status-audit";
 
 /**
  * Crea un par de tokens (approve / reject) para un user pending.
@@ -76,61 +82,71 @@ export async function getTokenInfo(tokenId: string): Promise<TokenInfo | null> {
  * usado y actualiza el profile.
  */
 export async function consumeToken(
-  tokenId: string
+  tokenId: string,
+  adminUserId: string,
 ): Promise<
   | { ok: true; userId: string; action: "approve" | "reject" }
   | { ok: false; error: string }
 > {
-  const admin = createAdminClient();
+  try {
+    return await transaction(async (client) => {
+      await ensureMemberStatusAuditSchemaWithClient(client);
+      await client.query(
+        "ALTER TABLE approval_tokens ADD COLUMN IF NOT EXISTS used_by_admin_id UUID REFERENCES profiles(id) ON DELETE SET NULL",
+      );
 
-  const { data: token, error: fetchError } = await admin
-    .from("approval_tokens")
-    .select("id, user_id, action, expires_at, used_at")
-    .eq("id", tokenId)
-    .maybeSingle();
+      const tokenResult = await client.query<{
+        id: string;
+        user_id: string;
+        action: "approve" | "reject";
+        expires_at: string;
+        used_at: string | null;
+      }>(
+        `SELECT id, user_id, action, expires_at, used_at
+           FROM approval_tokens WHERE id = $1 FOR UPDATE`,
+        [tokenId],
+      );
+      const token = tokenResult.rows[0];
+      if (!token) return { ok: false as const, error: "Enlace no encontrado." };
+      if (token.used_at) return { ok: false as const, error: "Este enlace ya fue usado." };
+      if (new Date(token.expires_at).getTime() < Date.now()) {
+        return { ok: false as const, error: "Este enlace expiró. Pide otro al miembro." };
+      }
 
-  if (fetchError || !token) {
-    return { ok: false, error: "Enlace no encontrado." };
-  }
-  if (token.used_at) {
-    return { ok: false, error: "Este enlace ya fue usado." };
-  }
-  if (new Date(token.expires_at).getTime() < Date.now()) {
-    return { ok: false, error: "Este enlace expiró. Pide otro al miembro." };
-  }
+      const profileResult = await client.query<{ status: MemberStatus }>(
+        "SELECT status FROM profiles WHERE id = $1 FOR UPDATE",
+        [token.user_id],
+      );
+      const profile = profileResult.rows[0];
+      if (!profile) return { ok: false as const, error: "El miembro ya no existe." };
+      if (profile.status !== "pending") {
+        return { ok: false as const, error: `La solicitud ya está ${profile.status === "approved" ? "aprobada" : "rechazada"}.` };
+      }
 
-  // Marcar como usado primero (anti race condition)
-  const { error: updateError } = await admin
-    .from("approval_tokens")
-    .update({ used_at: new Date().toISOString() })
-    .eq("id", tokenId)
-    .is("used_at", null);
+      const newStatus: MemberStatus = token.action === "approve" ? "approved" : "rejected";
+      await client.query(
+        `UPDATE approval_tokens
+            SET used_at = NOW(), used_by_admin_id = $2
+          WHERE id = $1`,
+        [tokenId, adminUserId],
+      );
+      await client.query(
+        "UPDATE profiles SET status = $2, updated_at = NOW() WHERE id = $1",
+        [token.user_id, newStatus],
+      );
+      await recordMemberStatusChange(client, {
+        profileId: token.user_id,
+        previousStatus: profile.status,
+        newStatus,
+        changedBy: adminUserId,
+        source: "email_link",
+        approvalTokenId: tokenId,
+      });
 
-  if (updateError) {
+      return { ok: true as const, userId: token.user_id, action: token.action };
+    });
+  } catch (error) {
+    console.error("[tokens] consume failed:", error);
     return { ok: false, error: "Error al procesar el enlace." };
   }
-
-  // Aplicar la accion al profile
-  const newStatus = token.action === "approve" ? "approved" : "rejected";
-  const { error: profileError } = await admin
-    .from("profiles")
-    .update({ status: newStatus })
-    .eq("id", token.user_id);
-
-  if (profileError) {
-    return { ok: false, error: "Error al actualizar el miembro." };
-  }
-
-  // Si se aprueba, confirmar email del user
-  if (newStatus === "approved") {
-    await admin.auth.admin
-      .updateUserById(token.user_id, { email_confirm: true })
-      .catch((e) => console.error("[tokens] email_confirm failed:", e));
-  }
-
-  return {
-    ok: true,
-    userId: token.user_id,
-    action: token.action as "approve" | "reject",
-  };
 }

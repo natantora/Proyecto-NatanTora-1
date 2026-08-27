@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/data/server";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import { canManageMembers, type Role } from "@/lib/permissions";
+import { query } from "@/lib/db";
+import { ensureMemberStatusAuditSchema } from "@/lib/member-status-audit";
 import MembersList from "./MembersList";
 import RolePermissionsMatrix from "@/components/admin/RolePermissionsMatrix";
 
@@ -21,6 +23,28 @@ export default async function AdminMembersPage() {
     .select("id, full_name, email, phone, status, role, created_at")
     .order("created_at", { ascending: false });
 
+  await ensureMemberStatusAuditSchema();
+  const auditResult = await query<{
+    profile_id: string;
+    status_changed_at: string;
+    status_changed_by_name: string;
+    status_change_source: string;
+  }>(
+    `SELECT DISTINCT ON (audit.profile_id)
+            audit.profile_id,
+            audit.created_at AS status_changed_at,
+            COALESCE(actor.full_name, actor.email) AS status_changed_by_name,
+            audit.source AS status_change_source
+       FROM member_status_audit audit
+       JOIN profiles actor ON actor.id = audit.changed_by
+      ORDER BY audit.profile_id, audit.created_at DESC`,
+  );
+  const latestAudit = new Map(auditResult.rows.map((row) => [row.profile_id, row]));
+  const members = (data ?? []).map((member: any) => ({
+    ...member,
+    ...(latestAudit.get(member.id) ?? {}),
+  }));
+
   return (
     <div className="min-w-0 space-y-7 sm:space-y-10">
       <div>
@@ -39,7 +63,7 @@ export default async function AdminMembersPage() {
       <RolePermissionsMatrix defaultOpen={false} />
 
       <MembersList
-        members={data ?? []}
+        members={members}
         currentUserRole={role as Role}
         currentUserId={user.id}
       />

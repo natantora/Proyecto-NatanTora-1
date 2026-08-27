@@ -1,14 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient, createAdminClient } from "@/lib/data/server";
-import { isUserAdmin } from "@/lib/admin-bootstrap";
+import { getCurrentUser } from "@/lib/auth";
+import { canManageMembers, type Role } from "@/lib/permissions";
+import { transaction } from "@/lib/db";
+import {
+  ensureMemberStatusAuditSchemaWithClient,
+  recordMemberStatusChange,
+  type MemberStatus,
+} from "@/lib/member-status-audit";
 
 export async function PATCH(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user || !(await isUserAdmin(user.id))) {
+  const user = await getCurrentUser();
+  if (!user || user.status !== "approved" || !canManageMembers(user.role as Role)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
@@ -17,30 +19,42 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("profiles")
-    .update({ status })
-    .eq("id", id);
-
-  if (error) {
-    console.error("[api/members] profile update failed:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // Confirmar email en auth.users si se aprueba.
-  // ROBUSTEZ: si auth.users no existe para este id (caso edge de profiles huérfanos),
-  // no fallar — el profile YA quedó actualizado y eso es lo esencial.
-  if (status === "approved") {
-    try {
-      await admin.auth.admin.updateUserById(id, { email_confirm: true });
-    } catch (e) {
-      console.warn(
-        "[api/members] auth.admin.updateUserById fallo (profile actualizado de todos modos):",
-        e
+  try {
+    const result = await transaction(async (client) => {
+      await ensureMemberStatusAuditSchemaWithClient(client);
+      const currentResult = await client.query<{ status: MemberStatus }>(
+        "SELECT status FROM profiles WHERE id = $1 FOR UPDATE",
+        [id],
       );
-    }
-  }
+      const current = currentResult.rows[0];
+      if (!current) return { found: false };
+      if (current.status === status) return { found: true, changed: false };
 
-  return NextResponse.json({ ok: true });
+      await client.query(
+        "UPDATE profiles SET status = $2, updated_at = NOW() WHERE id = $1",
+        [id, status],
+      );
+      await recordMemberStatusChange(client, {
+        profileId: id,
+        previousStatus: current.status,
+        newStatus: status as MemberStatus,
+        changedBy: user.id,
+        source: "admin_panel",
+      });
+      return { found: true, changed: true, statusChangedAt: new Date().toISOString() };
+    });
+    if (!result.found) {
+      return NextResponse.json({ error: "Miembro no encontrado" }, { status: 404 });
+    }
+    return NextResponse.json({
+      ok: true,
+      changed: result.changed,
+      status_changed_at: result.changed ? result.statusChangedAt : undefined,
+      status_changed_by_name: user.full_name || user.email,
+      status_change_source: "admin_panel",
+    });
+  } catch (error) {
+    console.error("[api/members] profile update failed:", error);
+    return NextResponse.json({ error: "No se pudo actualizar el miembro" }, { status: 500 });
+  }
 }

@@ -4,7 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ROLE_LABEL, ROLE_DESCRIPTION, type Role, isValidRole, assignableRolesFor } from "@/lib/permissions";
 
-type Member = { id: string; full_name: string | null; email: string | null; phone: string | null; status: string | null; role: string | null; created_at: string | null; };
+type Member = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  status: string | null;
+  role: string | null;
+  created_at: string | null;
+  status_changed_at?: string | null;
+  status_changed_by_name?: string | null;
+  status_change_source?: string | null;
+};
 type FilterKey = "all" | "pending" | "approved" | "rejected" | "staff";
 
 const ROLE_BADGE_COLOR: Record<Role, string> = {
@@ -38,8 +49,15 @@ export default function MembersList({ members, currentUserRole, currentUserId }:
     setLoadingId(id); setErr(null);
     try {
       const res = await fetch("/api/members", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
-      if (!res.ok) { const j = await res.json().catch(() => ({ error: "Error" })); throw new Error(j.error || "Error"); }
-      setList((prev) => prev.map((m) => (m.id === id ? { ...m, status } : m)));
+      const data = await res.json().catch(() => ({ error: "Error" }));
+      if (!res.ok) throw new Error(data.error || "Error");
+      setList((prev) => prev.map((m) => (m.id === id ? {
+        ...m,
+        status,
+        status_changed_at: data.status_changed_at ?? m.status_changed_at,
+        status_changed_by_name: data.status_changed_by_name ?? m.status_changed_by_name,
+        status_change_source: data.status_change_source ?? m.status_change_source,
+      } : m)));
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
     finally { setLoadingId(null); }
   }
@@ -116,6 +134,15 @@ export default function MembersList({ members, currentUserRole, currentUserId }:
                 <div>
                   <div className="xl:hidden text-[9px] tracking-[0.2em] uppercase font-bold text-ink-muted mb-1">Estado</div>
                   <StatusBadge status={m.status} />
+                  {m.status_changed_at && (
+                    <div className="mt-1.5 text-[9px] leading-tight text-ink-muted">
+                      Por {m.status_changed_by_name || "administrador"}<br />
+                      {new Date(m.status_changed_at).toLocaleString("es-MX", {
+                        day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+                      })}
+                      {m.status_change_source === "email_link" ? " · correo" : " · panel"}
+                    </div>
+                  )}
                 </div>
                 <div className="min-w-0 sm:col-span-2 xl:col-span-1">
                   <div className="xl:hidden text-[9px] tracking-[0.2em] uppercase font-bold text-ink-muted mb-2">Acceso y acciones</div>

@@ -459,6 +459,19 @@ CREATE TABLE IF NOT EXISTS approval_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_approval_tokens_user ON approval_tokens(user_id);
 
+CREATE TABLE IF NOT EXISTS member_status_audit (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  previous_status TEXT NOT NULL,
+  new_status TEXT NOT NULL,
+  changed_by UUID NOT NULL REFERENCES profiles(id) ON DELETE RESTRICT,
+  source TEXT NOT NULL CHECK (source IN ('email_link', 'admin_panel')),
+  approval_token_id UUID REFERENCES approval_tokens(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_member_status_audit_profile_created
+  ON member_status_audit(profile_id, created_at DESC);
+
 INSERT INTO schedules (kind, name, description, days, time, time_mode, offset_minutes, active, icon, position) VALUES
   ('rezo', 'Shajarit', 'Primer minyán', 'Lunes a Viernes', '07:00', 'fixed', 0, TRUE, '🕐', 1),
   ('rezo', 'Minha', 'Rezo de la tarde', 'Domingo a Jueves', '13:30', 'fixed', 0, TRUE, '☀️', 4),

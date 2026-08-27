@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getTokenInfo } from "@/lib/approval-tokens";
+import { getCurrentUser } from "@/lib/auth";
+import { canManageMembers, type Role } from "@/lib/permissions";
 import ApprovalForm from "./ApprovalForm";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +13,11 @@ interface PageProps {
 
 export default async function ApprovePage({ params }: PageProps) {
   const { token } = await params;
+  const user = await getCurrentUser();
+  if (!user) redirect(`/auth/login?next=/approve/${token}`);
+  if (user.status !== "approved" || !canManageMembers(user.role as Role)) {
+    redirect("/admin/dashboard?error=no_access");
+  }
   const info = await getTokenInfo(token);
 
   // Token inválido
