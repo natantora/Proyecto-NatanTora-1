@@ -31,8 +31,6 @@ export type OAuthAccountResult = {
 
 const GOOGLE_ISSUER = "https://accounts.google.com";
 const APPLE_ISSUER = "https://appleid.apple.com";
-const GOOGLE_REGISTERED_CALLBACK_ORIGIN =
-  "https://proyecto-natantora-1-production.up.railway.app";
 const googleJwks = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 const appleJwks = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
 
@@ -96,13 +94,6 @@ export function appBaseUrl(origin: string): string {
 }
 
 export function callbackUrl(provider: OAuthProvider, origin: string): string {
-  // El cliente actual de Google todavía tiene registrado el callback original
-  // de Railway. Ese host redirige de inmediato a natantora.com en proxy.ts,
-  // conservando code/state, por lo que nunca queda como dominio visible de la app.
-  if (provider === "google" && process.env.NODE_ENV === "production") {
-    return `${GOOGLE_REGISTERED_CALLBACK_ORIGIN}/api/auth/oauth/${provider}/callback`;
-  }
-
   return `${appBaseUrl(origin)}/api/auth/oauth/${provider}/callback`;
 }
 
