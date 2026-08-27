@@ -32,6 +32,7 @@ const serif = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://natantora.com"),
   title: "Midrash Natán Torá — Plaza Polanco, CDMX",
   description:
     "Centro de estudio y oración de la comunidad judía sefardí en Plaza Polanco, Ciudad de México. Clases diarias de Torá, rezos, eventos comunitarios bajo el minhag Halabi.",
