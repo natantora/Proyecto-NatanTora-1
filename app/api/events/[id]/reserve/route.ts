@@ -2,8 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { transaction } from "@/lib/db";
 import { clientIp, isRateLimited } from "@/lib/rate-limit";
+import { sendReservationConfirmation } from "@/lib/transactional-emails";
 
-type EventRecord = { id: string; seating_mode: "none" | "open" | "assigned"; capacity: number | null; published: boolean; reservations_open: boolean; seat_price: string | number };
+type EventRecord = { id: string; title: string; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; capacity: number | null; published: boolean; reservations_open: boolean; seat_price: string | number };
 
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   if (isRateLimited(`reserve:${clientIp(req)}`, 20, 10 * 60 * 1000)) {
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
   try {
     const result = await transaction(async (client) => {
-      const eventResult = await client.query<EventRecord>("SELECT id, seating_mode, capacity, published, reservations_open, seat_price FROM events WHERE id = $1 FOR UPDATE", [eventId]);
+      const eventResult = await client.query<EventRecord>("SELECT id, title, event_date, location, seating_mode, capacity, published, reservations_open, seat_price FROM events WHERE id = $1 FOR UPDATE", [eventId]);
       const event = eventResult.rows[0];
       if (!event) throw new Error("EVENT_NOT_FOUND");
       if (event.seating_mode === "none") throw new Error("NO_RESERVATIONS");
@@ -58,9 +59,34 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (seats.length) await client.query("UPDATE event_seats SET status = 'occupied' WHERE id = ANY($1::uuid[])", [seats.map((seat) => seat.id)]);
       const reservationBySeat = new Map(reservation.rows.map((item) => [item.seat_id, item]));
       const reservations = seats.length ? seats.map((seat) => reservationBySeat.get(seat.id)).filter(Boolean) : reservation.rows;
-      return { reservation: reservations[0], reservations, seat: seats[0] ?? null, seats };
+      const seatLabels = seats.map((seat) => seat.x !== null ? seat.row_label : `${seat.row_label}${seat.seat_number}`);
+      const quantity = Math.max(1, reservations.length);
+      return {
+        reservation: reservations[0],
+        reservations,
+        seat: seats[0] ?? null,
+        seats,
+        emailData: {
+          email: user.email,
+          memberName: user.full_name || user.email,
+          eventId,
+          eventTitle: event.title,
+          eventDate: event.event_date,
+          location: event.location || "Midrash Natán Torá",
+          seats: seatLabels,
+          quantity,
+          total: quantity * Number(event.seat_price ?? 0),
+        },
+      };
     });
-    return NextResponse.json({ ok: true, ...result });
+    await sendReservationConfirmation(result.emailData).catch((emailError) => console.error("[events/reserve] confirmation email failed:", emailError));
+    return NextResponse.json({
+      ok: true,
+      reservation: result.reservation,
+      reservations: result.reservations,
+      seat: result.seat,
+      seats: result.seats,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const responses: Record<string, [string, number]> = {

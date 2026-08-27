@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { canManageSeats, type Role } from "@/lib/permissions";
 import { formatMXN } from "@/lib/utils";
+import ReservationActions from "./ReservationActions";
 
 export const dynamic = "force-dynamic";
 
@@ -115,9 +116,10 @@ export default async function ReservationsAdminPage({ searchParams }: { searchPa
             <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-midrash-600">Cantidad</th>
             <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-midrash-600">Importe</th>
             <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Fecha</th>
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-midrash-600">Acciones</th>
           </tr></thead>
           <tbody className="divide-y divide-midrash-100">
-            {reservations.length === 0 ? <tr><td colSpan={6} className="px-4 py-10 text-center text-midrash-500">No hay reservaciones que coincidan.</td></tr> : null}
+            {reservations.length === 0 ? <tr><td colSpan={7} className="px-4 py-10 text-center text-midrash-500">No hay reservaciones que coincidan.</td></tr> : null}
             {reservations.map((group) => (
               <tr key={group.key}>
                 <td className="px-4 py-3"><Link href={`/admin/events/${group.eventId}`} className="font-semibold text-navy hover:text-gold-deep">{group.eventTitle}</Link><div className="mt-0.5 flex items-center gap-1 text-xs text-midrash-500"><CalendarDays className="h-3 w-3" /> {new Date(group.eventDate).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Mexico_City" })}</div></td>
@@ -126,6 +128,7 @@ export default async function ReservationsAdminPage({ searchParams }: { searchPa
                 <td className="px-4 py-3 text-center font-semibold">{group.quantity}</td>
                 <td className="px-4 py-3 text-right font-semibold">{group.total > 0 ? formatMXN(group.total) : "Gratuito"}</td>
                 <td className="px-4 py-3 text-midrash-600">{new Date(group.createdAt).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Mexico_City" })}</td>
+                <td className="px-4 py-3"><ReservationActions eventId={group.eventId} userId={group.userId} eventTitle={group.eventTitle} memberName={group.name} /></td>
               </tr>
             ))}
           </tbody>

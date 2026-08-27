@@ -7,6 +7,7 @@ import {
   recordMemberStatusChange,
   type MemberStatus,
 } from "@/lib/member-status-audit";
+import { sendMemberDecisionEmail } from "@/lib/transactional-emails";
 
 export async function PATCH(req: NextRequest) {
   const user = await getCurrentUser();
@@ -22,13 +23,13 @@ export async function PATCH(req: NextRequest) {
   try {
     const result = await transaction(async (client) => {
       await ensureMemberStatusAuditSchemaWithClient(client);
-      const currentResult = await client.query<{ status: MemberStatus }>(
-        "SELECT status FROM profiles WHERE id = $1 FOR UPDATE",
+      const currentResult = await client.query<{ status: MemberStatus; email: string | null; full_name: string | null }>(
+        "SELECT status, email, full_name FROM profiles WHERE id = $1 FOR UPDATE",
         [id],
       );
       const current = currentResult.rows[0];
       if (!current) return { found: false };
-      if (current.status === status) return { found: true, changed: false };
+      if (current.status === status) return { found: true, changed: false, profile: current };
 
       await client.query(
         "UPDATE profiles SET status = $2, updated_at = NOW() WHERE id = $1",
@@ -41,10 +42,17 @@ export async function PATCH(req: NextRequest) {
         changedBy: user.id,
         source: "admin_panel",
       });
-      return { found: true, changed: true, statusChangedAt: new Date().toISOString() };
+      return { found: true, changed: true, statusChangedAt: new Date().toISOString(), profile: current };
     });
     if (!result.found) {
       return NextResponse.json({ error: "Miembro no encontrado" }, { status: 404 });
+    }
+    if (result.changed && (status === "approved" || status === "rejected") && result.profile?.email) {
+      await sendMemberDecisionEmail({
+        email: result.profile.email,
+        memberName: result.profile.full_name || result.profile.email,
+        status,
+      }).catch((emailError) => console.error("[api/members] decision email failed:", emailError));
     }
     return NextResponse.json({
       ok: true,

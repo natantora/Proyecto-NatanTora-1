@@ -6,6 +6,7 @@ import {
   isValidRole,
   type Role,
 } from "@/lib/permissions";
+import { sendMemberDecisionEmail } from "@/lib/transactional-emails";
 
 /**
  * POST /api/admin/promote
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
   const adminCli = createAdminClient();
   const { data: target } = await adminCli
     .from("profiles")
-    .select("role")
+    .select("role,status,email,full_name")
     .eq("id", id)
     .maybeSingle();
   if (target?.role === "owner") {
@@ -77,6 +78,14 @@ export async function POST(req: NextRequest) {
   if (error) {
     console.error("[api/admin/promote] update failed:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (role !== "member" && target?.status !== "approved" && target?.email) {
+    await sendMemberDecisionEmail({
+      email: target.email,
+      memberName: target.full_name || "miembro",
+      status: "approved",
+    }).catch((emailError) => console.error("[api/admin/promote] approval email failed:", emailError));
   }
 
   return NextResponse.json({ ok: true });

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { cleanText, money, requireBillingAdmin } from "@/lib/billing";
 import { transaction } from "@/lib/db";
+import { sendPaymentReceipt } from "@/lib/transactional-emails";
 
 export async function POST(req: NextRequest) {
   const admin = await requireBillingAdmin();
@@ -14,8 +15,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await transaction(async (client) => {
-      const charges = await client.query<{ id: string; outstanding_amount: string }>(
-        `SELECT id, outstanding_amount::text
+      const charges = await client.query<{ id: string; concept: string; outstanding_amount: string }>(
+        `SELECT id, concept, outstanding_amount::text
            FROM billing_charges
           WHERE account_id = $1 AND status = 'open' AND outstanding_amount > 0
           ORDER BY due_date NULLS LAST, created_at
@@ -53,9 +54,11 @@ export async function POST(req: NextRequest) {
         [accountId, amount, account.rows[0].display_name, account.rows[0].email, notes, admin.user.id],
       );
       let remaining = amount;
+      const appliedConcepts: string[] = [];
       for (const charge of charges.rows) {
         if (remaining <= 0) break;
         const allocation = Math.min(remaining, Number(charge.outstanding_amount));
+        if (allocation > 0) appliedConcepts.push(charge.concept);
         await client.query(
           `INSERT INTO billing_payment_allocations (payment_id, charge_id, amount) VALUES ($1, $2, $3)`,
           [payment.rows[0].id, charge.id, allocation],
@@ -85,12 +88,34 @@ export async function POST(req: NextRequest) {
         account_id: accountId,
         open_balance: Number(summary.rows[0].open_balance),
         open_charges: Number(summary.rows[0].open_charges),
+        receipt: account.rows[0].email ? {
+          email: account.rows[0].email,
+          memberName: account.rows[0].display_name,
+          concepts: appliedConcepts,
+        } : null,
       };
     });
+    if (result.receipt) {
+      await sendPaymentReceipt({
+        ...result.receipt,
+        amount: result.amount,
+        method: "cash",
+        remainingBalance: result.open_balance,
+      }).catch((emailError) => console.error("[billing/cash] receipt email failed:", emailError));
+    }
     revalidatePath("/admin/accounts");
     revalidatePath("/admin/payments");
     revalidatePath("/mi-cuenta");
-    return NextResponse.json({ ok: true, payment: result });
+    return NextResponse.json({
+      ok: true,
+      payment: {
+        id: result.id,
+        amount: result.amount,
+        account_id: result.account_id,
+        open_balance: result.open_balance,
+        open_charges: result.open_charges,
+      },
+    });
   } catch (error: unknown) {
     console.error("[billing/cash]", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo registrar el pago" }, { status: 400 });
