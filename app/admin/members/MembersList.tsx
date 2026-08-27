@@ -45,7 +45,7 @@ export default function MembersList({ members, currentUserRole, currentUserId }:
   const assignable = assignableRolesFor(currentUserRole);
   const canChangeRoles = assignable.length > 0;
 
-  async function updateStatus(id: string, status: "approved" | "rejected") {
+  async function updateStatus(id: string, status: "pending" | "approved" | "rejected") {
     setLoadingId(id); setErr(null);
     try {
       const res = await fetch("/api/members", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
@@ -162,6 +162,11 @@ export default function MembersList({ members, currentUserRole, currentUserId }:
                       <option value="" disabled>Cambiar rol…</option>
                       {assignable.map((r) => (<option key={r} value={r}>{ROLE_LABEL[r]}</option>))}
                     </select>
+                  )}
+                  {!isPending && !isOwnerTarget && !isSelf && (
+                    <button disabled={isLoading} onClick={() => updateStatus(m.id, "pending")} className="text-[10px] tracking-[0.16em] uppercase font-semibold text-ink-muted border border-line px-3 py-2 hover:border-gold hover:text-gold-deep transition-colors duration-base ease-out-quart disabled:opacity-50">
+                      Volver a pendiente
+                    </button>
                   )}
                   {isOwnerTarget && (<span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-gold-deep italic">Propietario</span>)}
                   {isSelf && m.status === "approved" && !isOwnerTarget && (<span className="text-[10px] tracking-[0.22em] uppercase font-semibold text-ink-muted italic">Tú mismo</span>)}
