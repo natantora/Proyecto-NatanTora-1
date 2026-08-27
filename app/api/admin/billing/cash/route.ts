@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
           (billing_account_id, amount, status, payment_method, donor_name,
            donor_email, description, metadata, paid_at, billing_applied_at)
          VALUES ($1, $2, 'paid', 'cash', $3, $4, 'Pago de estado de cuenta',
-                 jsonb_build_object('notes', $5, 'registered_by', $6), NOW(), NOW())
+                 jsonb_build_object('notes', $5::text, 'registered_by', $6::text), NOW(), NOW())
          RETURNING id`,
         [accountId, amount, account.rows[0].display_name, account.rows[0].email, notes, admin.user.id],
       );
