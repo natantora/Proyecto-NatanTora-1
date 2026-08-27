@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { query } from "@/lib/db";
 import AccountStatementClient from "./AccountStatementClient";
+import { stripeConfigured } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,7 @@ export default async function MyAccountPage({
       charges={chargesResult.rows.map((row) => ({ ...row, original_amount: Number(row.original_amount), outstanding_amount: Number(row.outstanding_amount) }))}
       payments={paymentsResult.rows.map((row) => ({ ...row, amount: Number(row.amount) }))}
       paymentResult={payment === "success" ? "success" : payment === "cancelled" ? "cancelled" : null}
+      cardPaymentsEnabled={stripeConfigured()}
     />
   );
 }

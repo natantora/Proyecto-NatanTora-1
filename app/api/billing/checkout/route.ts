@@ -2,11 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { cleanText } from "@/lib/billing";
 import { query, transaction } from "@/lib/db";
-import { publicSiteUrl, stripeClient } from "@/lib/stripe";
+import { publicSiteUrl, stripeClient, stripeConfigured } from "@/lib/stripe";
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user || user.status !== "approved") return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  if (!stripeConfigured()) {
+    return NextResponse.json({ error: "El pago con tarjeta no está disponible por el momento." }, { status: 503 });
+  }
   const body = await req.json().catch(() => ({}));
   const requestedIds = Array.isArray(body.charge_ids)
     ? Array.from(new Set(body.charge_ids.map((id: unknown) => cleanText(id, 80)).filter(Boolean))).slice(0, 200)
@@ -80,6 +83,14 @@ export async function POST(req: NextRequest) {
   } catch (error: unknown) {
     if (pending?.paymentId) await query("UPDATE payments SET status = 'failed' WHERE id = $1 AND status = 'pending'", [pending.paymentId]).catch(() => undefined);
     console.error("[billing/checkout]", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo iniciar el pago" }, { status: 400 });
+    const publicMessages = new Set([
+      "Tu usuario no tiene un estado de cuenta vinculado",
+      "Uno de los cargos ya fue pagado o tiene un pago en proceso",
+      "El saldo seleccionado ya está cubierto",
+    ]);
+    const message = error instanceof Error && publicMessages.has(error.message)
+      ? error.message
+      : "El pago con tarjeta no está disponible por el momento.";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

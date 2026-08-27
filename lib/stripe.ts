@@ -7,6 +7,10 @@ export function stripeClient(): Stripe {
   return new Stripe(secret);
 }
 
+export function stripeConfigured(): boolean {
+  return Boolean(process.env.STRIPE_SECRET_KEY?.trim());
+}
+
 export function publicSiteUrl(): string {
   return siteOrigin();
 }
