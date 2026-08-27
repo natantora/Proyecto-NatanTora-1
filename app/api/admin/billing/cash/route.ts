@@ -51,13 +51,27 @@ export async function POST(req: NextRequest) {
         remaining = Math.round((remaining - allocation) * 100) / 100;
       }
       await applyBillingPayment(client, payment.rows[0].id);
-      return payment.rows[0];
+      const summary = await client.query<{ open_balance: string; open_charges: string }>(
+        `SELECT COALESCE(SUM(outstanding_amount) FILTER (WHERE status = 'open'), 0)::text AS open_balance,
+                COUNT(*) FILTER (WHERE status = 'open')::text AS open_charges
+           FROM billing_charges
+          WHERE account_id = $1`,
+        [accountId],
+      );
+      return {
+        ...payment.rows[0],
+        amount,
+        account_id: accountId,
+        open_balance: Number(summary.rows[0].open_balance),
+        open_charges: Number(summary.rows[0].open_charges),
+      };
     });
     revalidatePath("/admin/accounts");
     revalidatePath("/admin/payments");
     revalidatePath("/mi-cuenta");
     return NextResponse.json({ ok: true, payment: result });
   } catch (error: unknown) {
+    console.error("[billing/cash]", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo registrar el pago" }, { status: 400 });
   }
 }

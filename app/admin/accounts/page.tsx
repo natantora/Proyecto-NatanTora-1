@@ -4,7 +4,7 @@ import { query } from "@/lib/db";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import { canManageBilling } from "@/lib/permissions";
 import AccountsAdmin from "./AccountsAdmin";
-import type { BillingAccountRow, ImportSummary, ProfileOption } from "./types";
+import type { BillingAccountRow, BillingChargeRow, BillingPaymentRow, ImportSummary, ProfileOption } from "./types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export default async function AdminAccountsPage() {
   const role = await getUserRole(user.id);
   if (!canManageBilling(role)) redirect("/admin/dashboard?error=no_access");
 
-  const [accountResult, profileResult, importResult] = await Promise.all([
+  const [accountResult, profileResult, importResult, chargeResult, paymentResult] = await Promise.all([
     query<{
       id: string; display_name: string; email: string | null; phone: string | null;
       external_reference: string | null; notes: string | null; profile_id: string | null;
@@ -51,6 +51,28 @@ export default async function AdminAccountsPage() {
               created_at::text
          FROM billing_imports ORDER BY created_at DESC LIMIT 8`,
     ),
+    query<BillingChargeRow & { account_id: string; original_amount: number; outstanding_amount: number }>(
+      `SELECT id, account_id, concept, period,
+              original_amount::float8 AS original_amount,
+              outstanding_amount::float8 AS outstanding_amount,
+              status, source, due_date::text, notes, created_at::text
+         FROM billing_charges
+        ORDER BY created_at DESC`,
+    ),
+    query<BillingPaymentRow & { billing_account_id: string; amount: number }>(
+      `SELECT payment.id, payment.billing_account_id,
+              payment.amount::float8 AS amount, payment.status,
+              payment.payment_method, payment.description,
+              payment.metadata->>'notes' AS notes,
+              payment.paid_at::text, payment.created_at::text,
+              NULLIF(STRING_AGG(DISTINCT charge.concept, ' · '), '') AS applied_to
+         FROM payments payment
+         LEFT JOIN billing_payment_allocations allocation ON allocation.payment_id = payment.id
+         LEFT JOIN billing_charges charge ON charge.id = allocation.charge_id
+        WHERE payment.billing_account_id IS NOT NULL
+        GROUP BY payment.id
+        ORDER BY COALESCE(payment.paid_at, payment.created_at) DESC`,
+    ),
   ]);
 
   const accounts: BillingAccountRow[] = accountResult.rows.map((row) => ({
@@ -58,6 +80,8 @@ export default async function AdminAccountsPage() {
     open_balance: Number(row.open_balance),
     open_charges: Number(row.open_charges),
     total_paid: Number(row.total_paid),
+    charges: chargeResult.rows.filter((charge) => charge.account_id === row.id),
+    payments: paymentResult.rows.filter((payment) => payment.billing_account_id === row.id),
   }));
 
   return (

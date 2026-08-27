@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { BillingAccountRow, ImportSummary, ProfileOption } from "./types";
 
@@ -26,14 +26,17 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ filename: string; rows: PreviewRow[]; errors: string[] } | null>(null);
   const [query, setQuery] = useState("");
-  const totalBalance = accounts.reduce((sum, account) => sum + account.open_balance, 0);
-  const unlinked = accounts.filter((account) => !account.profile_id).length;
+  const [accountRows, setAccountRows] = useState(accounts);
+  const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
+  useEffect(() => setAccountRows(accounts), [accounts]);
+  const totalBalance = accountRows.reduce((sum, account) => sum + account.open_balance, 0);
+  const unlinked = accountRows.filter((account) => !account.profile_id).length;
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return accounts;
-    return accounts.filter((account) => [account.display_name, account.email, account.phone, account.external_reference]
+    if (!needle) return accountRows;
+    return accountRows.filter((account) => [account.display_name, account.email, account.phone, account.external_reference]
       .some((value) => value?.toLowerCase().includes(needle)));
-  }, [accounts, query]);
+  }, [accountRows, query]);
 
   async function api(url: string, options: RequestInit) {
     setError(null); setMessage(null); setBusy(true);
@@ -70,7 +73,10 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
     try {
-      await api("/api/admin/billing/cash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const result = await api("/api/admin/billing/cash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      setAccountRows((current) => current.map((account) => account.id === result.payment.account_id
+        ? { ...account, open_balance: result.payment.open_balance, open_charges: result.payment.open_charges, total_paid: account.total_paid + result.payment.amount }
+        : account));
       setMessage("Pago en efectivo registrado y aplicado al saldo"); form.reset(); router.refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
   }
@@ -159,7 +165,7 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
           <button disabled={busy || accounts.length === 0} className={buttonClass}>Agregar cargo</button>
         </ActionForm>
         <ActionForm title="Registrar pago en efectivo" onSubmit={recordCash}>
-          <AccountSelect accounts={accounts.filter((account) => account.open_balance > 0)} />
+          <AccountSelect accounts={accountRows.filter((account) => account.open_balance > 0)} />
           <input className={inputClass} name="amount" type="number" min="0.01" step="0.01" placeholder="Importe recibido" required />
           <textarea className={inputClass} name="notes" placeholder="Recibo, fecha o comentarios" rows={3} />
           <p className="text-[11px] leading-relaxed text-ink-muted">El pago se aplica primero a los cargos más antiguos.</p>
@@ -169,7 +175,16 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
 
       <section>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="serif-display text-[30px] text-navy">Cuentas</h2><p className="text-[12px] text-ink-soft">Vincula cada cuenta con el usuario que podrá verla y pagarla.</p></div><input className={`${inputClass} sm:max-w-xs`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar persona, correo o referencia" /></div>
-        <div className="mt-4 overflow-x-auto border border-line bg-white"><table className="min-w-[920px] w-full text-left text-[12px]"><thead className="bg-navy text-cream"><tr><th className="p-3">Cuenta</th><th className="p-3">Contacto</th><th className="p-3 text-right">Saldo</th><th className="p-3">Vinculación</th></tr></thead><tbody>{filtered.map((account) => <tr key={account.id} className="border-t border-line-soft"><td className="p-3"><strong className="text-navy">{account.display_name}</strong><div className="text-ink-muted">{account.external_reference || "Sin referencia"} · {account.open_charges} cargos abiertos</div></td><td className="p-3">{account.email || "Sin correo"}<div className="text-ink-muted">{account.phone}</div></td><td className="p-3 text-right font-semibold text-navy">{mxn(account.open_balance)}</td><td className="p-3"><select className={inputClass} value={account.profile_id || ""} onChange={(event) => linkProfile(account.id, event.target.value)} disabled={busy}><option value="">Sin usuario vinculado</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name} · {profile.email}</option>)}</select></td></tr>)}</tbody></table>{filtered.length === 0 && <p className="p-6 text-center text-[13px] text-ink-muted">No hay cuentas que coincidan.</p>}</div>
+        <div className="mt-4 overflow-x-auto border border-line bg-white">
+          <table className="min-w-[1040px] w-full text-left text-[12px]">
+            <thead className="bg-navy text-cream"><tr><th className="p-3">Cuenta</th><th className="p-3">Contacto</th><th className="p-3 text-right">Saldo pendiente</th><th className="p-3 text-right">Pagado</th><th className="p-3">Vinculación</th><th className="p-3 text-center">Detalle</th></tr></thead>
+            <tbody>{filtered.map((account) => {
+              const expanded = expandedAccountId === account.id;
+              return <AccountTableRows key={account.id} account={account} expanded={expanded} busy={busy} profiles={profiles} onToggle={() => setExpandedAccountId(expanded ? null : account.id)} onLink={linkProfile} />;
+            })}</tbody>
+          </table>
+          {filtered.length === 0 && <p className="p-6 text-center text-[13px] text-ink-muted">No hay cuentas que coincidan.</p>}
+        </div>
       </section>
 
       {imports.length > 0 && <section><h2 className="serif-display text-[28px] text-navy">Últimas importaciones</h2><div className="mt-3 grid gap-2">{imports.map((item) => <div key={item.id} className="flex flex-wrap justify-between gap-2 border border-line bg-cream-light px-4 py-3 text-[12px]"><span><strong>{item.filename}</strong> · {new Date(item.created_at).toLocaleString("es-MX")}</span><span>{item.imported_rows} nuevos · {item.duplicate_rows} duplicados · {item.error_rows} errores</span></div>)}</div></section>}
@@ -180,3 +195,45 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
 function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) { return <div className={`border p-4 text-center ${warn ? "border-amber-300 bg-amber-50" : "border-line bg-cream-light"}`}><div className="serif-display text-[26px] text-navy">{value}</div><div className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-muted">{label}</div></div>; }
 function ActionForm({ title, onSubmit, children }: { title: string; onSubmit: (event: FormEvent<HTMLFormElement>) => void; children: React.ReactNode }) { return <form onSubmit={onSubmit} className="space-y-3 border border-line bg-cream-light p-5"><h2 className="serif-display text-[24px] text-navy">{title}</h2>{children}</form>; }
 function AccountSelect({ accounts }: { accounts: BillingAccountRow[] }) { return <select className={inputClass} name="account_id" required defaultValue=""><option value="" disabled>Selecciona una cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.display_name} · {mxn(account.open_balance)}</option>)}</select>; }
+
+function AccountTableRows({ account, expanded, busy, profiles, onToggle, onLink }: {
+  account: BillingAccountRow;
+  expanded: boolean;
+  busy: boolean;
+  profiles: ProfileOption[];
+  onToggle: () => void;
+  onLink: (accountId: string, profileId: string) => void;
+}) {
+  return <>
+    <tr className="border-t border-line-soft align-top hover:bg-cream-light/60">
+      <td className="p-3"><strong className="text-navy">{account.display_name}</strong><div className="mt-0.5 text-ink-muted">{account.external_reference || "Sin referencia"} · {account.open_charges} cargos abiertos</div></td>
+      <td className="p-3">{account.email || "Sin correo"}<div className="text-ink-muted">{account.phone || "Sin teléfono"}</div></td>
+      <td className="p-3 text-right"><strong className={account.open_balance > 0 ? "text-navy" : "text-green-700"}>{mxn(account.open_balance)}</strong><div className="text-[10px] text-ink-muted">{account.open_balance > 0 ? "Por cobrar" : "Al corriente"}</div></td>
+      <td className="p-3 text-right font-semibold text-green-700">{mxn(account.total_paid)}</td>
+      <td className="p-3"><select className={inputClass} value={account.profile_id || ""} onChange={(event) => onLink(account.id, event.target.value)} disabled={busy}><option value="">Sin usuario vinculado</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name} · {profile.email}</option>)}</select></td>
+      <td className="p-3 text-center"><button type="button" onClick={onToggle} className="border border-gold px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-navy hover:bg-gold hover:text-navy-deep">{expanded ? "Cerrar" : "Ver movimientos"}</button></td>
+    </tr>
+    {expanded && <tr className="border-t border-line bg-cream-light"><td colSpan={6} className="p-4 sm:p-6">
+      <div className="grid gap-5 xl:grid-cols-2">
+        <div>
+          <div className="mb-2 flex items-center justify-between"><h3 className="serif-display text-[23px] text-navy">Cargos</h3><span className="text-[11px] text-ink-muted">{account.charges.length} movimientos</span></div>
+          <div className="overflow-x-auto border border-line bg-white"><table className="min-w-[620px] w-full"><thead className="bg-white text-[10px] uppercase tracking-[0.12em] text-ink-muted"><tr><th className="p-3 text-left">Fecha / concepto</th><th className="p-3 text-right">Cargo</th><th className="p-3 text-right">Abonado</th><th className="p-3 text-right">Pendiente</th><th className="p-3 text-left">Estado</th></tr></thead><tbody>{account.charges.map((charge) => {
+            const paid = Math.max(0, charge.original_amount - charge.outstanding_amount);
+            return <tr key={charge.id} className="border-t border-line-soft"><td className="p-3"><strong className="text-navy">{charge.concept}</strong><div className="text-[10px] text-ink-muted">{new Date(charge.created_at).toLocaleDateString("es-MX")}{charge.period ? ` · ${charge.period}` : ""}{charge.due_date ? ` · Vence ${new Date(`${charge.due_date}T12:00:00`).toLocaleDateString("es-MX")}` : ""}</div>{charge.notes && <div className="mt-1 text-[10px] text-ink-soft">{charge.notes}</div>}</td><td className="p-3 text-right">{mxn(charge.original_amount)}</td><td className="p-3 text-right text-green-700">{mxn(paid)}</td><td className="p-3 text-right font-semibold text-navy">{mxn(charge.outstanding_amount)}</td><td className="p-3"><StatusPill status={charge.status} /></td></tr>;
+          })}{account.charges.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-ink-muted">Esta cuenta todavía no tiene cargos.</td></tr>}</tbody></table></div>
+        </div>
+        <div>
+          <div className="mb-2 flex items-center justify-between"><h3 className="serif-display text-[23px] text-navy">Pagos</h3><span className="text-[11px] text-ink-muted">{account.payments.length} movimientos</span></div>
+          <div className="overflow-x-auto border border-line bg-white"><table className="min-w-[560px] w-full"><thead className="bg-white text-[10px] uppercase tracking-[0.12em] text-ink-muted"><tr><th className="p-3 text-left">Fecha</th><th className="p-3 text-left">Método / aplicación</th><th className="p-3 text-right">Importe</th><th className="p-3 text-left">Estado</th></tr></thead><tbody>{account.payments.map((payment) => <tr key={payment.id} className="border-t border-line-soft"><td className="p-3">{new Date(payment.paid_at || payment.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</td><td className="p-3"><strong className="text-navy">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "stripe" ? "Tarjeta" : payment.payment_method || "Otro"}</strong><div className="text-[10px] text-ink-muted">{payment.applied_to || payment.description || "Pago de estado de cuenta"}</div>{payment.notes && <div className="mt-1 text-[10px] text-ink-soft">{payment.notes}</div>}</td><td className="p-3 text-right font-semibold text-green-700">{mxn(payment.amount)}</td><td className="p-3"><StatusPill status={payment.status} /></td></tr>)}{account.payments.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-ink-muted">Todavía no hay pagos registrados.</td></tr>}</tbody></table></div>
+        </div>
+      </div>
+    </td></tr>}
+  </>;
+}
+
+function StatusPill({ status }: { status: string }) {
+  const paid = status === "paid";
+  const open = status === "open" || status === "pending";
+  const label = status === "paid" ? "Pagado" : status === "open" ? "Pendiente" : status === "pending" ? "Procesando" : status === "waived" ? "Condonado" : status === "refunded" ? "Reembolsado" : status;
+  return <span className={`inline-flex px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] ${paid ? "bg-green-100 text-green-800" : open ? "bg-amber-100 text-amber-900" : "bg-gray-100 text-gray-700"}`}>{label}</span>;
+}
