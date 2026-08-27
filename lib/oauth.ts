@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { importPKCS8, createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
 import { transaction } from "@/lib/db";
+import { siteOrigin } from "@/lib/site-url";
 
 export type OAuthProvider = "google" | "apple";
 
@@ -89,7 +90,7 @@ export function oauthCookieName(provider: OAuthProvider): string {
 }
 
 export function appBaseUrl(origin: string): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL || origin).replace(/\/$/, "");
+  return siteOrigin(origin);
 }
 
 export function callbackUrl(provider: OAuthProvider, origin: string): string {

@@ -3,6 +3,7 @@ import { sendEmail } from "./email";
 import { sendWhatsApp } from "./whatsapp";
 import { createApprovalTokens } from "./approval-tokens";
 import { pendingApprovalEmail } from "./email-templates";
+import { siteOrigin } from "./site-url";
 
 interface NotifyParams {
   userId: string;
@@ -12,8 +13,7 @@ interface NotifyParams {
 }
 
 function getSiteUrl(): string {
-  if (process.env.NODE_ENV === "production") return "https://natantora.com";
-  return (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
+  return siteOrigin();
 }
 
 /**

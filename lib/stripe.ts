@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { siteOrigin } from "@/lib/site-url";
 
 export function stripeClient(): Stripe {
   const secret = process.env.STRIPE_SECRET_KEY;
@@ -7,5 +8,5 @@ export function stripeClient(): Stripe {
 }
 
 export function publicSiteUrl(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
+  return siteOrigin();
 }

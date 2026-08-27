@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { canAccessAdminPanel, type Role } from "@/lib/permissions";
 import { SESSION_COOKIE, getSessionByToken, verifySessionToken } from "@/lib/auth";
+import { PRODUCTION_SITE_ORIGIN } from "@/lib/site-url";
 
 const PUBLIC_PATHS = new Set([
   "/",
@@ -21,6 +22,20 @@ function isPublic(pathname: string): boolean {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Railway debe ser solamente la infraestructura. La dirección pública y
+  // cualquier flujo de autenticación siempre viven en el dominio oficial.
+  if (
+    process.env.NODE_ENV === "production" &&
+    (request.nextUrl.hostname.endsWith(".up.railway.app") ||
+      request.nextUrl.hostname === "www.natantora.com")
+  ) {
+    return NextResponse.redirect(
+      new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, PRODUCTION_SITE_ORIGIN),
+      308,
+    );
+  }
+
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   // verifySessionToken is a cheap signature/expiry check to skip a DB round trip
   // for requests with no cookie or a garbage/expired one. The actual role/status
