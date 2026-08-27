@@ -22,13 +22,16 @@ function isPublic(pathname: string): boolean {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const requestHost = (forwardedHost || request.headers.get("host") || request.nextUrl.host)
+    .split(":")[0]
+    .toLowerCase();
 
   // Railway debe ser solamente la infraestructura. La dirección pública y
   // cualquier flujo de autenticación siempre viven en el dominio oficial.
   if (
-    process.env.NODE_ENV === "production" &&
-    (request.nextUrl.hostname.endsWith(".up.railway.app") ||
-      request.nextUrl.hostname === "www.natantora.com")
+    requestHost.endsWith(".up.railway.app") ||
+    requestHost === "www.natantora.com"
   ) {
     return NextResponse.redirect(
       new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, PRODUCTION_SITE_ORIGIN),
