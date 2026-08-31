@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   const donorEmail = cleanEmail(body.email);
   const purposeKey = cleanText(body.purpose, 40);
   const purpose = PURPOSES[purposeKey] || PURPOSES.general;
-  const frequency = body.frequency === "monthly" ? "monthly" : "one_time";
+  const frequency = "one_time";
   if (!amount || amount < 20 || amount > 1_000_000) return NextResponse.json({ error: "El importe debe estar entre $20 y $1,000,000 MXN" }, { status: 400 });
   if (!donorName) return NextResponse.json({ error: "Escribe el nombre del donante" }, { status: 400 });
   if (!/^\S+@\S+\.\S+$/.test(donorEmail)) return NextResponse.json({ error: "Escribe un correo válido para enviar el recibo" }, { status: 400 });
@@ -44,19 +44,18 @@ export async function POST(req: NextRequest) {
   try {
     const commonMetadata = { payment_id: paymentId, payment_kind: "donation", frequency, purpose: purposeKey };
     const session = await stripe.checkout.sessions.create({
-      mode: frequency === "monthly" ? "subscription" : "payment",
+      mode: "payment",
       customer_email: donorEmail,
       line_items: [{
         price_data: {
           currency: "mxn",
           unit_amount: Math.round(amount * 100),
-          product_data: { name: frequency === "monthly" ? "Donativo mensual a Natán Torá" : "Donativo a Natán Torá", description: purpose },
-          ...(frequency === "monthly" ? { recurring: { interval: "month" as const } } : {}),
+          product_data: { name: "Donativo a Natán Torá", description: purpose },
         },
         quantity: 1,
       }],
       metadata: commonMetadata,
-      ...(frequency === "monthly" ? { subscription_data: { metadata: commonMetadata } } : { payment_intent_data: { metadata: commonMetadata } }),
+      payment_intent_data: { metadata: commonMetadata },
       success_url: `${publicSiteUrl()}/donativos?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${publicSiteUrl()}/donativos?payment=cancelled`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
