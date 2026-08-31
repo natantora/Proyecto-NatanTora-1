@@ -10,7 +10,6 @@ const PUBLIC_PATHS = new Set([
   "/auth/callback",
   "/auth/pendiente",
   "/auth/error",
-  "/donativos",
 ]);
 
 function isPublic(pathname: string): boolean {
