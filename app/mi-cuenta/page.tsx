@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function MyAccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ payment?: string }>;
+  searchParams: Promise<{ payment?: string; session_id?: string }>;
 }) {
-  const { payment } = await searchParams;
+  const { payment, session_id } = await searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/auth/login?next=/mi-cuenta");
   if (user.status !== "approved") redirect("/auth/pendiente");
@@ -69,6 +69,7 @@ export default async function MyAccountPage({
       charges={chargesResult.rows.map((row) => ({ ...row, original_amount: Number(row.original_amount), outstanding_amount: Number(row.outstanding_amount) }))}
       payments={paymentsResult.rows.map((row) => ({ ...row, amount: Number(row.amount) }))}
       paymentResult={payment === "success" ? "success" : payment === "cancelled" ? "cancelled" : null}
+      sessionId={session_id || null}
       cardPaymentsEnabled={stripeConfigured()}
     />
   );

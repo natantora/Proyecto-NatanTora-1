@@ -1,40 +1,78 @@
-import { createAdminClient } from "@/lib/data/server";
-import { formatMXN, cn } from "@/lib/utils";
+import { redirect } from "next/navigation";
+import { Armchair, CircleDollarSign, Gift, ReceiptText } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth";
+import { query } from "@/lib/db";
+import { canManagePayments, type Role } from "@/lib/permissions";
+import { cn, formatMXN } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-type PaymentRow = { id: string; amount: number | null; currency: string | null; status: string | null; payment_method: string | null; donor_name: string | null; donor_email: string | null; description: string | null; created_at: string | null; };
+type PaymentRow = {
+  id: string; amount: string; currency: string; status: string; payment_method: string | null;
+  donor_name: string | null; donor_email: string | null; description: string | null;
+  metadata: Record<string, unknown> | null; stripe_payment_intent: string | null;
+  stripe_subscription_id: string | null; paid_at: Date | null; created_at: Date;
+  billing_account_id: string | null; account_name: string | null; event_title: string | null;
+};
+
+const kindLabel: Record<string, string> = { billing: "Estado de cuenta", donation: "Donativo", event: "Evento" };
+const statusLabel: Record<string, string> = { paid: "Pagado", pending: "Pendiente", failed: "Fallido", refunded: "Reembolsado" };
 
 export default async function AdminPaymentsPage() {
-  const supabase = createAdminClient();
-  const { data } = await supabase.from("payments").select("*").order("created_at", { ascending: false }).limit(200);
-  const payments = (data ?? []) as PaymentRow[];
-  const totalPaid = payments.filter((p) => p.status === "paid").reduce((s, p) => s + (p.amount ?? 0), 0);
-  const pendingCount = payments.filter((p) => p.status === "pending").length;
-  return (
-    <div className="space-y-6">
-      <h1 className="font-serif text-3xl font-bold text-midrash-900">Pagos</h1>
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg bg-green-50 p-4 text-center"><div className="font-serif text-2xl font-bold text-green-700">{formatMXN(totalPaid)}</div><div className="text-xs text-green-600">Recaudado</div></div>
-        <div className="rounded-lg bg-yellow-50 p-4 text-center"><div className="font-serif text-2xl font-bold text-yellow-700">{pendingCount}</div><div className="text-xs text-yellow-600">Pendientes</div></div>
-        <div className="rounded-lg bg-midrash-50 p-4 text-center"><div className="font-serif text-2xl font-bold text-midrash-800">{payments.length}</div><div className="text-xs text-midrash-600">Total registros</div></div>
-      </div>
-      <div className="overflow-hidden rounded-xl border border-midrash-100 bg-white">
-        <table className="min-w-full divide-y divide-midrash-100">
-          <thead className="bg-midrash-50"><tr><th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Fecha</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Donante</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Concepto</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Método</th><th className="px-4 py-3 text-right text-xs font-semibold uppercase text-midrash-600">Monto</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase text-midrash-600">Estado</th></tr></thead>
-          <tbody className="divide-y divide-midrash-100">
-            {payments.length === 0 && (<tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-midrash-500">Sin pagos aún.</td></tr>)}
-            {payments.map((p) => (<tr key={p.id}>
-              <td className="px-4 py-3 text-sm">{p.created_at ? new Date(p.created_at).toLocaleDateString("es-MX") : ""}</td>
-              <td className="px-4 py-3 text-sm"><div className="font-medium text-midrash-900">{p.donor_name ?? "—"}</div><div className="text-xs text-midrash-500">{p.donor_email ?? ""}</div></td>
-              <td className="px-4 py-3 text-sm">{p.description ?? "Donativo"}</td>
-              <td className="px-4 py-3 text-sm">{p.payment_method ?? "—"}</td>
-              <td className="px-4 py-3 text-right text-sm font-semibold">{formatMXN(p.amount ?? 0)}</td>
-              <td className="px-4 py-3 text-sm"><span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", p.status === "paid" ? "bg-green-100 text-green-800" : p.status === "pending" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800")}>{p.status ?? "unknown"}</span></td>
-            </tr>))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+  const user = await getCurrentUser();
+  if (!user || user.status !== "approved" || !canManagePayments(user.role as Role)) redirect("/admin/dashboard");
+  const result = await query<PaymentRow>(
+    `SELECT payment.id, payment.amount::text, payment.currency, payment.status,
+            payment.payment_method, payment.donor_name, payment.donor_email,
+            payment.description, payment.metadata, payment.stripe_payment_intent,
+            payment.stripe_subscription_id, payment.paid_at, payment.created_at, payment.billing_account_id,
+            account.display_name AS account_name, event.title AS event_title
+       FROM payments payment
+  LEFT JOIN billing_accounts account ON account.id = payment.billing_account_id
+  LEFT JOIN events event ON event.id::text = payment.metadata->>'event_id'
+   ORDER BY payment.created_at DESC LIMIT 500`,
   );
+  const payments = result.rows;
+  const paid = payments.filter((payment) => payment.status === "paid");
+  const totalPaid = paid.reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const donations = paid.filter((payment) => payment.metadata?.kind === "donation").reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const eventRevenue = paid.filter((payment) => payment.metadata?.kind === "event").reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const pendingCount = payments.filter((payment) => payment.status === "pending").length;
+
+  return <div className="space-y-6">
+    <div><h1 className="font-serif text-3xl font-bold text-midrash-900">Pagos</h1><p className="mt-1 text-sm text-midrash-600">Historial unificado de estados de cuenta, donativos y reservaciones de eventos.</p></div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Stat icon={CircleDollarSign} label="Ingresos confirmados" value={formatMXN(totalPaid)} />
+      <Stat icon={Gift} label="Donativos recibidos" value={formatMXN(donations)} />
+      <Stat icon={Armchair} label="Ingresos por eventos" value={formatMXN(eventRevenue)} />
+      <Stat icon={ReceiptText} label="Operaciones pendientes" value={String(pendingCount)} />
+    </div>
+    <div className="overflow-x-auto rounded-xl border border-midrash-100 bg-white">
+      <table className="w-full min-w-[1120px] divide-y divide-midrash-100 text-sm">
+        <thead className="bg-midrash-50"><tr>{["Fecha", "Tipo", "Persona", "Concepto", "Método", "Monto", "Estado", "Referencia"].map((label) => <th key={label} className={`px-4 py-3 text-xs font-semibold uppercase text-midrash-600 ${label === "Monto" ? "text-right" : "text-left"}`}>{label}</th>)}</tr></thead>
+        <tbody className="divide-y divide-midrash-100">
+          {!payments.length ? <tr><td colSpan={8} className="px-4 py-10 text-center text-midrash-500">Todavía no hay movimientos.</td></tr> : null}
+          {payments.map((payment) => {
+            const kind = typeof payment.metadata?.kind === "string" ? payment.metadata.kind : payment.billing_account_id ? "billing" : "donation";
+            const moment = new Date(payment.paid_at ?? payment.created_at);
+            const reference = payment.stripe_payment_intent || payment.stripe_subscription_id || payment.id;
+            return <tr key={payment.id} className="align-top">
+              <td className="whitespace-nowrap px-4 py-3 text-midrash-600"><div>{moment.toLocaleDateString("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" })}</div><div className="text-xs text-midrash-400">{moment.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: "America/Mexico_City" })}</div></td>
+              <td className="px-4 py-3"><div className="font-semibold text-navy">{kindLabel[kind] ?? "Pago"}</div>{payment.metadata?.frequency === "monthly" ? <div className="text-xs text-gold-deep">Mensual</div> : null}</td>
+              <td className="px-4 py-3"><div className="font-medium text-midrash-900">{payment.account_name || payment.donor_name || "—"}</div><div className="max-w-[220px] break-all text-xs text-midrash-500">{payment.donor_email ?? ""}</div></td>
+              <td className="max-w-[280px] px-4 py-3 text-midrash-700">{payment.event_title || payment.description || (kind === "donation" ? "Apoyo general" : "Pago")}</td>
+              <td className="px-4 py-3 text-midrash-600">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "stripe" ? "Stripe" : payment.payment_method || "—"}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-navy">{formatMXN(Number(payment.amount))}</td>
+              <td className="px-4 py-3"><span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", payment.status === "paid" ? "bg-green-100 text-green-800" : payment.status === "pending" ? "bg-amber-100 text-amber-800" : payment.status === "refunded" ? "bg-blue-100 text-blue-800" : "bg-red-100 text-red-800")}>{statusLabel[payment.status] ?? payment.status}</span></td>
+              <td className="px-4 py-3"><span title={reference} className="block max-w-[170px] truncate font-mono text-[11px] text-midrash-500">{reference}</span></td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
+  </div>;
+}
+
+function Stat({ icon: Icon, label, value }: { icon: typeof CircleDollarSign; label: string; value: string }) {
+  return <div className="rounded-xl border border-midrash-100 bg-white p-4"><Icon className="h-5 w-5 text-gold-deep" /><div className="mt-3 font-serif text-2xl font-bold text-navy">{value}</div><div className="text-xs text-midrash-500">{label}</div></div>;
 }

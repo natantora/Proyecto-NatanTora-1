@@ -189,6 +189,15 @@ type PaymentReceiptEmailParams = {
   paidAt?: Date | string;
 };
 
+type DonationReceiptEmailParams = {
+  donorName: string;
+  amount: number;
+  purpose: string;
+  recurring: boolean;
+  paidAt?: Date | string;
+  siteUrl: string;
+};
+
 type PasswordResetEmailParams = {
   memberName: string;
   resetUrl: string;
@@ -289,6 +298,23 @@ export function paymentReceiptEmail(p: PaymentReceiptEmailParams): string {
     ],
     buttonLabel: "Ver mi estado de cuenta",
     buttonUrl: p.accountUrl,
+  });
+}
+
+export function donationReceiptEmail(p: DonationReceiptEmailParams): string {
+  return transactionalEmail({
+    preview: `Recibo de donativo por ${formatMoney(p.amount)}`,
+    eyebrow: "Donativo recibido",
+    title: "Gracias por apoyar al Midrash",
+    body: `Hola, ${escapeHtml(p.donorName)}. Recibimos correctamente tu donativo. Tu apoyo sostiene las clases, actividades y proyectos de la comunidad.`,
+    details: [
+      ["Importe", formatMoney(p.amount)],
+      ["Destino", p.purpose],
+      ["Frecuencia", p.recurring ? "Mensual" : "Una sola vez"],
+      ["Fecha", formatEventDate(p.paidAt ?? new Date())],
+    ],
+    buttonLabel: "Volver al sitio",
+    buttonUrl: p.siteUrl,
   });
 }
 

@@ -9,16 +9,17 @@ import EventReservationClient from "./EventReservationClient";
 export const dynamic = "force-dynamic";
 type EventRecord = { id: string; title: string; description: string | null; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; seat_plan_type: "architectural" | "custom"; capacity: number | null; seat_price: string | number; published: boolean; reservations_open: boolean };
 
-export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EventDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ payment?: string; session_id?: string; payment_id?: string }> }) {
   const user = await getCurrentUser();
   const { id } = await params;
+  const paymentParams = await searchParams;
   const eventResult = await query<EventRecord>("SELECT * FROM events WHERE id = $1 LIMIT 1", [id]);
   const event = eventResult.rows[0];
   if (!event || !user || (!event.published && !(user.status === "approved" && canEditEvents(user.role as Role)))) notFound();
   const [seatsResult, reservationResult, countResult, venueLayout] = await Promise.all([
     event.seating_mode === "assigned" ? query<{ id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number }>("SELECT id, row_label, seat_number, status, x, y, rotation FROM event_seats WHERE event_id = $1 ORDER BY row_label, seat_number", [id]) : Promise.resolve({ rows: [] }),
-    query<{ id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null }>(`SELECT r.id, r.seat_id, s.row_label, s.seat_number, s.x FROM event_reservations r LEFT JOIN event_seats s ON s.id = r.seat_id WHERE r.event_id = $1 AND r.user_id = $2 ORDER BY s.row_label, s.seat_number`, [id, user.id]),
-    query<{ count: string }>("SELECT COUNT(*)::text AS count FROM event_reservations WHERE event_id = $1", [id]),
+    query<{ id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null }>(`SELECT r.id, r.seat_id, s.row_label, s.seat_number, s.x FROM event_reservations r LEFT JOIN event_seats s ON s.id = r.seat_id WHERE r.event_id = $1 AND r.user_id = $2 AND r.status = 'confirmed' ORDER BY s.row_label, s.seat_number`, [id, user.id]),
+    query<{ count: string }>("SELECT COUNT(*)::text AS count FROM event_reservations WHERE event_id = $1 AND (status = 'confirmed' OR (status = 'pending' AND expires_at > NOW()))", [id]),
     event.seating_mode === "assigned" ? getEventVenueTables(id) : Promise.resolve([]),
   ]);
   return <main className="min-h-screen bg-cream">
@@ -29,6 +30,6 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       {event.seating_mode === "assigned" ? <p className="mt-3 text-sm font-semibold text-gold-light">{Number(event.seat_price) > 0 ? `$${Number(event.seat_price).toLocaleString("es-MX")} MXN por asiento` : "Evento gratuito"}</p> : null}
       {event.description ? <p className="mt-6 max-w-2xl leading-relaxed text-cream/80">{event.description}</p> : null}
     </div></section>
-    <section className="px-3 py-8 sm:px-6 sm:py-16"><div className="mx-auto max-w-5xl"><EventReservationClient eventId={event.id} mode={event.seating_mode} planType={event.seat_plan_type ?? "architectural"} capacity={event.capacity} seatPrice={Number(event.seat_price ?? 0)} reservationsOpen={event.reservations_open} seats={seatsResult.rows} venueTables={venueLayout} existingReservations={reservationResult.rows} reservedCount={Number(countResult.rows[0]?.count ?? 0)} /></div></section>
+    <section className="px-3 py-8 sm:px-6 sm:py-16"><div className="mx-auto max-w-5xl"><EventReservationClient eventId={event.id} mode={event.seating_mode} planType={event.seat_plan_type ?? "architectural"} capacity={event.capacity} seatPrice={Number(event.seat_price ?? 0)} reservationsOpen={event.reservations_open} seats={seatsResult.rows} venueTables={venueLayout} existingReservations={reservationResult.rows} reservedCount={Number(countResult.rows[0]?.count ?? 0)} paymentResult={paymentParams.payment === "success" ? "success" : paymentParams.payment === "cancelled" ? "cancelled" : null} sessionId={paymentParams.session_id || null} cancelledPaymentId={paymentParams.payment_id || null} /></div></section>
   </main>;
 }

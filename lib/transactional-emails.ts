@@ -1,6 +1,7 @@
 import { sendEmail } from "@/lib/email";
 import {
   memberDecisionEmail,
+  donationReceiptEmail,
   paymentReceiptEmail,
   reservationCancellationEmail,
   reservationConfirmationEmail,
@@ -69,5 +70,21 @@ export async function sendPaymentReceipt(params: {
     subject: `Pago recibido — ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(params.amount)}`,
     html: paymentReceiptEmail({ ...params, accountUrl: `${siteOrigin()}/mi-cuenta` }),
     text: `Recibimos tu pago por ${params.amount.toFixed(2)} MXN. Saldo pendiente: ${params.remainingBalance.toFixed(2)} MXN.`,
+  });
+}
+
+export async function sendDonationReceipt(params: {
+  email: string;
+  donorName: string;
+  amount: number;
+  purpose: string;
+  recurring: boolean;
+  paidAt?: Date | string;
+}) {
+  return sendEmail({
+    to: params.email,
+    subject: `Gracias por tu donativo — ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(params.amount)}`,
+    html: donationReceiptEmail({ ...params, siteUrl: `${siteOrigin()}/donativos` }),
+    text: `Gracias por tu donativo de ${params.amount.toFixed(2)} MXN para ${params.purpose}.`,
   });
 }

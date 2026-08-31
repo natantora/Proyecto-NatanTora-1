@@ -435,10 +435,39 @@ CREATE INDEX IF NOT EXISTS idx_billing_charges_account
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS billing_account_id UUID REFERENCES billing_accounts(id) ON DELETE SET NULL;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS billing_applied_at TIMESTAMPTZ;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_invoice_id TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_stripe_session
   ON payments(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_stripe_invoice
+  ON payments(stripe_invoice_id) WHERE stripe_invoice_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_payments_stripe_subscription
+  ON payments(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_payments_billing_account
   ON payments(billing_account_id, created_at DESC);
+
+-- Las reservaciones gratuitas se confirman al instante. Las reservaciones con
+-- precio se mantienen temporalmente mientras Stripe procesa el pago y solo se
+-- confirman cuando el cobro queda pagado.
+ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'confirmed';
+ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS payment_id UUID REFERENCES payments(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'event_reservations_status_check') THEN
+    ALTER TABLE event_reservations ADD CONSTRAINT event_reservations_status_check
+      CHECK (status IN ('pending', 'confirmed', 'expired', 'cancelled'));
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_event_reservations_payment
+  ON event_reservations(payment_id) WHERE payment_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_event_reservations_active
+  ON event_reservations(event_id, status, expires_at);
+ALTER TABLE event_reservations DROP CONSTRAINT IF EXISTS event_reservations_event_id_seat_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_event_reservations_active_seat
+  ON event_reservations(event_id, seat_id)
+  WHERE seat_id IS NOT NULL AND status IN ('pending', 'confirmed');
 
 CREATE TABLE IF NOT EXISTS billing_payment_allocations (
   payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,

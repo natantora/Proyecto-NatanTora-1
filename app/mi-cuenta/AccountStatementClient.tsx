@@ -1,23 +1,41 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Charge = { id: string; concept: string; period: string | null; original_amount: number; outstanding_amount: number; due_date: string | null; notes: string | null; created_at: string; };
 type Payment = { id: string; amount: number; status: string; payment_method: string | null; description: string | null; created_at: string; paid_at: string | null; };
 
 const mxn = (value: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
 
-export default function AccountStatementClient({ account, charges, payments, paymentResult, cardPaymentsEnabled }: {
+export default function AccountStatementClient({ account, charges, payments, paymentResult, sessionId, cardPaymentsEnabled }: {
   account: { id: string; display_name: string; email: string | null; external_reference: string | null };
   charges: Charge[]; payments: Payment[];
   paymentResult: "success" | "cancelled" | null;
+  sessionId: string | null;
   cardPaymentsEnabled: boolean;
 }) {
+  const router = useRouter();
   const [selected, setSelected] = useState(() => new Set(charges.map((charge) => charge.id)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const total = charges.reduce((sum, charge) => sum + charge.outstanding_amount, 0);
   const selectedTotal = useMemo(() => charges.filter((charge) => selected.has(charge.id)).reduce((sum, charge) => sum + charge.outstanding_amount, 0), [charges, selected]);
+
+  useEffect(() => {
+    if (paymentResult !== "success" || !sessionId) return;
+    let attempts = 0;
+    const check = async () => {
+      attempts += 1;
+      const response = await fetch(`/api/payments/status?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (payload.status === "paid") {
+        router.replace("/mi-cuenta");
+        router.refresh();
+      } else if (attempts < 7) window.setTimeout(check, 1200);
+    };
+    void check();
+  }, [paymentResult, router, sessionId]);
 
   function toggle(id: string) {
     setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });

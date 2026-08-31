@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Armchair, CheckCircle2, Loader2, Users } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
 import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
@@ -8,10 +9,12 @@ import InteractiveSeatPlan, { type SeatPlanType } from "@/components/Interactive
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null };
 
-export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, reservedCount }: {
+export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, reservedCount, paymentResult, sessionId, cancelledPaymentId }: {
   eventId: string; mode: "none" | "open" | "assigned"; planType: SeatPlanType; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
   seatPrice: number; reservationsOpen: boolean; existingReservations: Reservation[]; reservedCount: number;
+  paymentResult: "success" | "cancelled" | null; sessionId: string | null; cancelledPaymentId: string | null;
 }) {
+  const router = useRouter();
   const [seats, setSeats] = useState(initialSeats);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reservations, setReservations] = useState(existingReservations);
@@ -25,12 +28,31 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
     return [...grouped.entries()];
   }, [seats]);
 
+  useEffect(() => {
+    if (paymentResult === "cancelled" && cancelledPaymentId) {
+      void fetch(`/api/events/${eventId}/reserve`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payment_id: cancelledPaymentId }) })
+        .finally(() => { router.replace(`/eventos/${eventId}`); router.refresh(); });
+      return;
+    }
+    if (paymentResult !== "success" || !sessionId) return;
+    let attempts = 0;
+    const check = async () => {
+      attempts += 1;
+      const response = await fetch(`/api/payments/status?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (payload.status === "paid") { router.replace(`/eventos/${eventId}`); router.refresh(); }
+      else if (attempts < 7) window.setTimeout(check, 1200);
+    };
+    void check();
+  }, [cancelledPaymentId, eventId, paymentResult, router, sessionId]);
+
   async function reserve() {
     setLoading(true); setError("");
     try {
       const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds } : {}) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
+      if (body.requiresPayment && body.url) { window.location.href = body.url; return; }
       const reservedSeats: Seat[] = body.seats ?? (body.seat ? [body.seat] : []);
       const newReservations: Reservation[] = (body.reservations ?? (body.reservation ? [body.reservation] : [])).map((item: Reservation, index: number) => ({
         ...item,
@@ -49,6 +71,8 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   }
 
   if (mode === "none") return <div className="border border-line bg-cream-light p-6 text-sm text-ink-soft">Este evento no requiere reservar lugar.</div>;
+  if (paymentResult === "success") return <div className="border border-green-200 bg-green-50 p-7 text-center"><Loader2 className="mx-auto h-9 w-9 animate-spin text-green-700" /><h2 className="mt-4 font-serif text-2xl font-bold text-navy">Confirmando tu pago</h2><p className="mt-2 text-sm text-ink-soft">No cierres esta página. Tus lugares quedarán confirmados en unos segundos.</p></div>;
+  if (paymentResult === "cancelled") return <div className="border border-amber-200 bg-amber-50 p-7 text-center"><h2 className="font-serif text-2xl font-bold text-navy">Pago cancelado</h2><p className="mt-2 text-sm text-ink-soft">No se realizó ningún cargo. Estamos liberando los lugares seleccionados.</p></div>;
   if (reservations.length > 0) return (
     <div className="border border-gold/40 bg-gold/10 p-7 text-center">
       <CheckCircle2 className="mx-auto h-10 w-10 text-gold-deep" />
@@ -72,10 +96,10 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
       <div className="flex items-start gap-4"><Users className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div>
         <h2 className="font-serif text-2xl font-bold text-navy">Lugar libre</h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-soft">Apartas tu entrada, pero no un asiento específico. Al llegar eliges entre los lugares disponibles.</p>
-        <p className="mt-4 text-sm font-semibold text-navy">Quedan {remaining} de {capacity} lugares</p>
+        <p className="mt-4 text-sm font-semibold text-navy">Quedan {remaining} de {capacity} lugares{seatPrice > 0 ? ` · ${seatPrice.toLocaleString("es-MX", { style: "currency", currency: "MXN" })}` : " · Gratuito"}</p>
       </div></div>
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
-      <button onClick={reserve} disabled={loading || remaining === 0} className="btn-primary mt-6 w-full justify-center sm:w-auto">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : remaining === 0 ? "Cupo completo" : "Reservar mi lugar"}</button>
+      <button onClick={reserve} disabled={loading || remaining === 0} className="btn-primary mt-6 w-full justify-center sm:w-auto">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : remaining === 0 ? "Cupo completo" : seatPrice > 0 ? "Continuar al pago" : "Reservar mi lugar"}</button>
     </div>;
   }
 
@@ -83,7 +107,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   const toggleSeat = (seatId: string) => setSelectedIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
   const selectedNames = selected.map((seat) => seat.x !== null ? seat.row_label : `${seat.row_label}${seat.seat_number}`);
   const compactNames = selectedNames.length > 4 ? `${selectedNames.slice(0, 4).join(", ")} y ${selectedNames.length - 4} más` : selectedNames.join(", ");
-  const confirmText = loading ? <Loader2 className="h-4 w-4 animate-spin" /> : selectedIds.length > 1 ? `Confirmar ${selectedIds.length} asientos` : "Confirmar asiento";
+  const confirmText = loading ? <Loader2 className="h-4 w-4 animate-spin" /> : seatPrice > 0 ? `Pagar ${selectedIds.length > 1 ? `${selectedIds.length} asientos` : "asiento"}` : selectedIds.length > 1 ? `Confirmar ${selectedIds.length} asientos` : "Confirmar asiento";
   const reservationControls = (
     <div className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-gold/30 bg-cream-light/95 px-4 py-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(10,29,54,.16)] backdrop-blur sm:static sm:mt-6 sm:flex sm:justify-between sm:border-line sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-5 sm:shadow-none" aria-live="polite">
       <p className="min-w-0 text-sm text-ink-soft">

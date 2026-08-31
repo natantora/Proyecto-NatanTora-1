@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function ReservationActions({ eventId, userId, eventTitle, memberName }: { eventId: string; userId: string; eventTitle: string; memberName: string }) {
+export default function ReservationActions({ eventId, userId, eventTitle, memberName, paymentStatus }: { eventId: string; userId: string; eventTitle: string; memberName: string; paymentStatus: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,5 +28,6 @@ export default function ReservationActions({ eventId, userId, eventTitle, member
     }
   }
 
+  if (paymentStatus === "paid") return <div className="min-w-[120px] text-right text-[10px] font-bold uppercase tracking-[0.12em] text-green-700">Definitiva</div>;
   return <div className="min-w-[120px] text-right"><button type="button" disabled={busy} onClick={cancel} className="rounded border border-red-200 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-red-700 hover:bg-red-50 disabled:opacity-50">{busy ? "Cancelando…" : "Cancelar"}</button>{error ? <div className="mt-1 text-[10px] text-red-700">{error}</div> : null}</div>;
 }

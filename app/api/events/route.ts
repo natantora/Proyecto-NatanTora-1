@@ -156,6 +156,17 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, event: result.rows[0] });
   }
 
+  if (body.action === "update_price") {
+    const seatPrice = money(body.seat_price);
+    if (seatPrice === null) return NextResponse.json({ error: "El precio debe ser un importe válido" }, { status: 400 });
+    const result = await query(
+      "UPDATE events SET seat_price = $2 WHERE id = $1 AND seating_mode <> 'none' RETURNING *",
+      [body.id, seatPrice],
+    );
+    if (!result.rows[0]) return NextResponse.json({ error: "Evento no encontrado o sin reservaciones" }, { status: 404 });
+    return NextResponse.json({ ok: true, event: result.rows[0] });
+  }
+
   const allowed = ["title", "description", "event_date", "location", "image_url"] as const;
   const entries = allowed.filter((key) => body[key] !== undefined).map((key) => [key, body[key]] as const);
   if (!entries.length) return NextResponse.json({ error: "No hay cambios" }, { status: 400 });

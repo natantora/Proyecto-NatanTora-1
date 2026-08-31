@@ -172,7 +172,7 @@ export default function EventsAdmin({ initial, architecturalSeatCount, customSea
                   <label className="block text-xs font-semibold uppercase tracking-wide text-midrash-600">
                     Precio por asiento (MXN)
                     <input required min={0} max={1000000} step="0.01" type="number" className="input mt-1.5 bg-white normal-case" placeholder="Ej. 500" value={form.seat_price} onChange={(e) => setForm({ ...form, seat_price: e.target.value })} />
-                    <span className="mt-2 block normal-case font-normal">Escribe 0 si el evento es gratuito. El cobro en línea se configurará por separado.</span>
+                    <span className="mt-2 block normal-case font-normal">Escribe 0 si el evento es gratuito. Si tiene precio, cada reservación se cobrará de forma segura con Stripe.</span>
                   </label>
                   {architecturalSeatCount > 0 ? (
                     <>
