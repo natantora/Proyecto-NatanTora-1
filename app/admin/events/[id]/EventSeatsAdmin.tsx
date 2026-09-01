@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { User } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Gift, Loader2, User } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
 import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
@@ -9,7 +10,8 @@ type SeatingMode = "none" | "open" | "assigned";
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type Reservation = { id: string; seat_id: string | null; holder_name: string; holder_email: string; holder_phone: string | null; created_at: string };
 
-export default function EventSeatsAdmin({ seatingMode, planType, capacity, seats, reservations, reservationCount, venueTables, canViewReservations }: {
+export default function EventSeatsAdmin({ eventId, seatingMode, planType, capacity, seats, reservations, reservationCount, venueTables, canViewReservations }: {
+  eventId: string;
   seatingMode: SeatingMode;
   planType: SeatPlanType;
   capacity: number | null;
@@ -19,7 +21,13 @@ export default function EventSeatsAdmin({ seatingMode, planType, capacity, seats
   venueTables: VenueTable[];
   canViewReservations: boolean;
 }) {
+  const router = useRouter();
   const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null);
+  const [courtesySeatIds, setCourtesySeatIds] = useState<string[]>([]);
+  const [courtesyName, setCourtesyName] = useState("Cortesía del Midrash");
+  const [savingCourtesy, setSavingCourtesy] = useState(false);
+  const [courtesyError, setCourtesyError] = useState("");
+  const [courtesySuccess, setCourtesySuccess] = useState("");
 
   const reservationBySeat = useMemo(() => {
     const map = new Map<string, Reservation>();
@@ -48,6 +56,39 @@ export default function EventSeatsAdmin({ seatingMode, planType, capacity, seats
   const selectedSeat = selectedSeatId ? seats.find((s) => s.id === selectedSeatId) : null;
   const occupiedCount = seats.filter((s) => s.status === "occupied").length;
 
+  function selectSeat(seatId: string) {
+    const seat = seats.find((item) => item.id === seatId);
+    setSelectedSeatId(seatId);
+    setCourtesyError("");
+    setCourtesySuccess("");
+    if (!canViewReservations || !seat || seat.status === "occupied") return;
+    setCourtesySeatIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
+  }
+
+  async function reserveCourtesy() {
+    if (!courtesySeatIds.length) return;
+    setSavingCourtesy(true);
+    setCourtesyError("");
+    setCourtesySuccess("");
+    try {
+      const response = await fetch("/api/admin/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: eventId, seat_ids: courtesySeatIds, holder_name: courtesyName }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "No fue posible apartar los asientos");
+      setCourtesySuccess(`${courtesySeatIds.length} ${courtesySeatIds.length === 1 ? "asiento reservado" : "asientos reservados"} como cortesía sin costo.`);
+      setCourtesySeatIds([]);
+      setSelectedSeatId(null);
+      router.refresh();
+    } catch (caught) {
+      setCourtesyError(caught instanceof Error ? caught.message : "No fue posible apartar los asientos");
+    } finally {
+      setSavingCourtesy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-midrash-700"><strong>{occupiedCount}</strong> de <strong>{seats.length}</strong> asientos reservados.</p>
@@ -56,7 +97,8 @@ export default function EventSeatsAdmin({ seatingMode, planType, capacity, seats
           seats={seats}
           venueTables={venueTables}
           selectedSeatId={selectedSeatId}
-          onSelect={setSelectedSeatId}
+          selectedSeatIds={courtesySeatIds}
+          onSelect={selectSeat}
           allowOccupiedSelection
           planType={planType}
         />
@@ -65,6 +107,19 @@ export default function EventSeatsAdmin({ seatingMode, planType, capacity, seats
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-navy bg-white" /> Libre</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-red-500 bg-red-100" /> Ocupado</span>
           </div>
+          {canViewReservations ? (
+            <div className="rounded-xl border border-gold/35 bg-gold/10 p-4">
+              <p className="flex items-center gap-2 font-serif text-lg font-bold text-navy"><Gift className="h-4 w-4 text-gold-deep" /> Cortesías del administrador</p>
+              <p className="mt-1 text-xs leading-relaxed text-midrash-600">Selecciona uno o varios asientos libres en el plano. Se ocuparán inmediatamente y no generarán ningún cobro.</p>
+              <label className="mt-4 block text-[10px] font-bold uppercase tracking-[0.16em] text-midrash-600">Nombre o referencia</label>
+              <input value={courtesyName} onChange={(event) => setCourtesyName(event.target.value)} maxLength={120} className="input mt-1 normal-case" placeholder="Cortesía del Midrash" />
+              <button type="button" onClick={reserveCourtesy} disabled={savingCourtesy || courtesySeatIds.length === 0} className="btn-primary mt-3 w-full justify-center disabled:opacity-50">
+                {savingCourtesy ? <Loader2 className="h-4 w-4 animate-spin" /> : `Reservar sin costo${courtesySeatIds.length ? ` (${courtesySeatIds.length})` : ""}`}
+              </button>
+              {courtesySuccess ? <p className="mt-2 text-xs font-semibold text-green-700">{courtesySuccess}</p> : null}
+              {courtesyError ? <p className="mt-2 text-xs text-red-700">{courtesyError}</p> : null}
+            </div>
+          ) : null}
           {selectedSeatId ? (
             <div className="rounded-xl border border-midrash-200 bg-midrash-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-midrash-600">Asiento {selectedSeat?.row_label}</p>
@@ -78,7 +133,7 @@ export default function EventSeatsAdmin({ seatingMode, planType, capacity, seats
               ) : selectedSeat?.status === "occupied" ? (
                 <p className="mt-2 text-sm text-midrash-500">Ocupado. Los datos personales solo están disponibles para Administradores y Propietarios.</p>
               ) : (
-                <p className="mt-2 text-sm text-midrash-500">Disponible — nadie lo ha reservado.</p>
+                <p className="mt-2 text-sm text-midrash-500">{courtesySeatIds.includes(selectedSeatId) ? "Seleccionado para cortesía sin costo." : "Disponible — nadie lo ha reservado."}</p>
               )}
             </div>
           ) : (

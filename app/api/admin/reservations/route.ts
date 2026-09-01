@@ -6,6 +6,57 @@ import { canManageSeats, type Role } from "@/lib/permissions";
 import { stripeClient } from "@/lib/stripe";
 import { sendReservationCancellation } from "@/lib/transactional-emails";
 
+export async function POST(req: NextRequest) {
+  const admin = await getCurrentUser();
+  if (!admin || admin.status !== "approved" || !canManageSeats(admin.role as Role)) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  const body = await req.json().catch(() => ({}));
+  const eventId = typeof body.event_id === "string" ? body.event_id : "";
+  const seatIds = [...new Set(Array.isArray(body.seat_ids) ? body.seat_ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0) : [])].slice(0, 50);
+  const holderName = typeof body.holder_name === "string" && body.holder_name.trim()
+    ? body.holder_name.trim().slice(0, 120)
+    : "Cortesía del Midrash";
+  if (!eventId || !seatIds.length) return NextResponse.json({ error: "Selecciona al menos un asiento" }, { status: 400 });
+
+  try {
+    const reservations = await transaction(async (client) => {
+      const event = await client.query<{ id: string; seating_mode: string }>(
+        "SELECT id, seating_mode FROM events WHERE id = $1 FOR UPDATE",
+        [eventId],
+      );
+      if (!event.rows[0] || event.rows[0].seating_mode !== "assigned") throw new Error("INVALID_EVENT");
+      const seats = await client.query<{ id: string; status: string }>(
+        "SELECT id, status FROM event_seats WHERE event_id = $1 AND id = ANY($2::uuid[]) ORDER BY id FOR UPDATE",
+        [eventId, seatIds],
+      );
+      if (seats.rows.length !== seatIds.length || seats.rows.some((seat) => seat.status !== "available")) {
+        throw new Error("SEAT_UNAVAILABLE");
+      }
+      const inserted = await client.query(
+        `INSERT INTO event_reservations
+          (event_id, user_id, seat_id, holder_name, holder_email, holder_phone, unit_price, status, expires_at, payment_id)
+         SELECT $1, $2, selected_seat_id, $4, $5, $6, 0, 'confirmed', NULL, NULL
+           FROM unnest($3::uuid[]) AS selected_seat_id
+         RETURNING id, seat_id`,
+        [eventId, admin.id, seatIds, holderName, admin.email, admin.phone],
+      );
+      await client.query("UPDATE event_seats SET status = 'occupied' WHERE id = ANY($1::uuid[])", [seatIds]);
+      return inserted.rows;
+    });
+    revalidatePath(`/admin/events/${eventId}`);
+    revalidatePath("/admin/reservations");
+    revalidatePath(`/eventos/${eventId}`);
+    return NextResponse.json({ ok: true, reservations });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "INVALID_EVENT") return NextResponse.json({ error: "El evento no usa selección de asientos" }, { status: 409 });
+    if (message === "SEAT_UNAVAILABLE") return NextResponse.json({ error: "Uno de los asientos ya fue ocupado. Actualiza el plano e inténtalo de nuevo." }, { status: 409 });
+    console.error("[admin/reservations] complimentary reservation failed:", error);
+    return NextResponse.json({ error: "No se pudieron reservar las cortesías" }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   const admin = await getCurrentUser();
   if (!admin || admin.status !== "approved" || !canManageSeats(admin.role as Role)) {

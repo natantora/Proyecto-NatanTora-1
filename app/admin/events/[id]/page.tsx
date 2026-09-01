@@ -49,6 +49,7 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
       </div>
       {event.seating_mode !== "none" ? <EventPriceEditor eventId={event.id} initialPrice={Number(event.seat_price ?? 0)} label={event.seating_mode === "assigned" ? "Precio por silla (MXN)" : "Precio por lugar (MXN)"} /> : null}
       <EventSeatsAdmin
+        eventId={event.id}
         seatingMode={event.seating_mode}
         planType={event.seat_plan_type ?? "architectural"}
         capacity={event.capacity}
