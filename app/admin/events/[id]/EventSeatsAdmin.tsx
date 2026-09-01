@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Gift, Loader2, User } from "lucide-react";
+import { Gift, Loader2, Printer, User } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
 import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
@@ -91,7 +91,10 @@ export default function EventSeatsAdmin({ eventId, seatingMode, planType, capaci
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-midrash-700"><strong>{occupiedCount}</strong> de <strong>{seats.length}</strong> asientos reservados.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-midrash-700"><strong>{occupiedCount}</strong> de <strong>{seats.length}</strong> asientos reservados.</p>
+        {canViewReservations ? <a href={`/admin/events/${eventId}/seating-chart`} target="_blank" rel="noreferrer" className="btn-secondary inline-flex items-center gap-2"><Printer className="h-4 w-4" /> Imprimir plano con nombres</a> : null}
+      </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <InteractiveSeatPlan
           seats={seats}
