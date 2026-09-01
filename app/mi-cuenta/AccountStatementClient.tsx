@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Charge = { id: string; concept: string; period: string | null; original_amount: number; outstanding_amount: number; due_date: string | null; notes: string | null; created_at: string; };
+type Charge = { id: string; concept: string; period: string | null; original_amount: number; outstanding_amount: number; status: "open" | "paid" | "waived"; due_date: string | null; notes: string | null; created_at: string; };
 type Payment = { id: string; amount: number; status: string; payment_method: string | null; description: string | null; created_at: string; paid_at: string | null; };
 
 const mxn = (value: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
 
-export default function AccountStatementClient({ account, charges, payments, paymentResult, sessionId, internalPaymentId, providerPaymentId, cardPaymentsEnabled }: {
+export default function AccountStatementClient({ account, charges, allCharges, payments, paymentResult, sessionId, internalPaymentId, providerPaymentId, cardPaymentsEnabled }: {
   account: { id: string; display_name: string; email: string | null; external_reference: string | null };
-  charges: Charge[]; payments: Payment[];
+  charges: Charge[]; allCharges: Charge[]; payments: Payment[];
   paymentResult: "success" | "cancelled" | null;
   sessionId: string | null;
   internalPaymentId: string | null;
@@ -75,8 +75,40 @@ export default function AccountStatementClient({ account, charges, payments, pay
           {charges.length > 0 && <div className="flex flex-col gap-4 bg-navy p-5 text-cream sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><div className="text-[10px] font-bold uppercase tracking-[0.18em] text-cream/60">Total seleccionado</div><div className="serif-display text-[28px]">{mxn(selectedTotal)}</div>{!cardPaymentsEnabled && <p className="mt-1 text-[11px] text-cream/70">El pago con tarjeta no está disponible por el momento.</p>}</div><button type="button" disabled={!cardPaymentsEnabled || busy || selectedTotal <= 0} onClick={checkout} className="bg-gold px-6 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-navy-deep hover:bg-gold-light disabled:cursor-not-allowed disabled:opacity-50">{!cardPaymentsEnabled ? "Pago no disponible" : busy ? "Preparando pago..." : "Pagar con tarjeta"}</button></div>}
         </section>
 
-        <section><h2 className="serif-display text-[30px] text-navy">Historial de pagos</h2><div className="mt-3 overflow-x-auto border border-line bg-white"><table className="min-w-[600px] w-full text-left text-[12px]"><thead className="bg-cream-light"><tr><th className="p-3">Fecha</th><th className="p-3">Descripción</th><th className="p-3">Método</th><th className="p-3 text-right">Importe</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id} className="border-t border-line-soft"><td className="p-3">{new Date(payment.paid_at || payment.created_at).toLocaleDateString("es-MX")}</td><td className="p-3">{payment.description || "Pago de estado de cuenta"}</td><td className="p-3">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "mercadopago" ? "Mercado Pago" : payment.payment_method === "stripe" ? "Tarjeta" : payment.payment_method || "—"}</td><td className="p-3 text-right font-semibold">{mxn(payment.amount)}</td></tr>)}{payments.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-ink-muted">Todavía no hay pagos registrados.</td></tr>}</tbody></table></div></section>
+        <section>
+          <h2 className="serif-display text-[34px] text-navy sm:text-[40px]">Historial de movimientos</h2>
+          <p className="mt-1 text-[12px] text-ink-soft">Aquí puedes consultar todos los cargos de la cuenta, incluyendo los que ya fueron pagados.</p>
+
+          <div className="mt-5 border border-line bg-white">
+            <div className="border-b border-line bg-cream-light px-4 py-3 sm:px-5"><h3 className="text-[13px] font-bold uppercase tracking-[0.12em] text-navy">Todos los cargos</h3></div>
+            {allCharges.length > 0 ? <div>{allCharges.map((charge) => {
+              const paidAmount = Math.max(0, charge.original_amount - charge.outstanding_amount);
+              return <article key={charge.id} className="border-b border-line-soft p-4 last:border-b-0 sm:grid sm:grid-cols-[120px_minmax(0,1fr)_150px_120px] sm:items-center sm:gap-4 sm:px-5">
+                <div className="text-[11px] text-ink-muted">{new Date(charge.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}</div>
+                <div className="mt-1 min-w-0 sm:mt-0"><strong className="block text-[13px] text-navy">{charge.concept}</strong><div className="text-[11px] text-ink-muted">{charge.period || "Sin periodo"}{charge.notes ? ` · ${charge.notes}` : ""}</div></div>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-[11px] sm:mt-0 sm:block sm:text-right"><div><span className="block text-[9px] uppercase tracking-[0.12em] text-ink-muted">Cargo</span><strong className="text-[13px] text-navy">{mxn(charge.original_amount)}</strong></div><div className="sm:mt-1"><span className="block text-[9px] uppercase tracking-[0.12em] text-ink-muted">Abonado</span><strong className="text-green-700">{mxn(paidAmount)}</strong></div></div>
+                <div className="mt-3 sm:mt-0 sm:text-right"><ChargeStatus status={charge.status} outstanding={charge.outstanding_amount} /></div>
+              </article>;
+            })}</div> : <p className="p-8 text-center text-[12px] text-ink-muted">Todavía no hay cargos registrados en esta cuenta.</p>}
+          </div>
+
+          <div className="mt-5 border border-line bg-white">
+            <div className="border-b border-line bg-cream-light px-4 py-3 sm:px-5"><h3 className="text-[13px] font-bold uppercase tracking-[0.12em] text-navy">Pagos recibidos</h3></div>
+            {payments.length > 0 ? <div>{payments.map((payment) => <article key={payment.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-line-soft p-4 last:border-b-0 sm:grid-cols-[120px_minmax(0,1fr)_160px_130px] sm:items-center sm:px-5">
+              <div className="col-span-2 text-[11px] text-ink-muted sm:col-span-1">{new Date(payment.paid_at || payment.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}</div>
+              <div><strong className="block text-[13px] text-navy">{payment.description || "Pago de estado de cuenta"}</strong><span className="text-[11px] text-ink-muted">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "mercadopago" ? "Mercado Pago" : payment.payment_method === "stripe" ? "Tarjeta" : payment.payment_method || "Otro"}</span></div>
+              <div className="self-end text-right text-[10px] font-bold uppercase tracking-[0.1em] text-green-700 sm:self-auto">Pago confirmado</div>
+              <strong className="col-span-2 text-right text-[15px] text-green-700 sm:col-span-1">− {mxn(payment.amount)}</strong>
+            </article>)}</div> : <p className="p-8 text-center text-[12px] text-ink-muted">Todavía no hay pagos registrados.</p>}
+          </div>
+        </section>
       </div>
     </div>
   );
+}
+
+function ChargeStatus({ status, outstanding }: { status: Charge["status"]; outstanding: number }) {
+  if (status === "paid") return <span className="inline-flex bg-green-100 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-green-800">Pagado</span>;
+  if (status === "waived") return <span className="inline-flex bg-gray-100 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-gray-700">Condonado</span>;
+  return <span className="inline-flex bg-amber-100 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-amber-900">Pendiente · {mxn(outstanding)}</span>;
 }

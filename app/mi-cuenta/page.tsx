@@ -39,16 +39,16 @@ export default async function MyAccountPage({
     );
   }
 
-  const [chargesResult, paymentsResult] = await Promise.all([
+  const [allChargesResult, paymentsResult] = await Promise.all([
     query<{
       id: string; concept: string; period: string | null; original_amount: string;
-      outstanding_amount: string; due_date: string | null; notes: string | null; created_at: string;
+      outstanding_amount: string; status: "open" | "paid" | "waived"; due_date: string | null; notes: string | null; created_at: string;
     }>(
       `SELECT id, concept, period, original_amount::text, outstanding_amount::text,
-              due_date::text, notes, created_at::text
+              status, due_date::text, notes, created_at::text
          FROM billing_charges
-        WHERE account_id = $1 AND status = 'open' AND outstanding_amount > 0
-        ORDER BY due_date NULLS LAST, created_at`,
+        WHERE account_id = $1
+        ORDER BY created_at DESC`,
       [account.id],
     ),
     query<{
@@ -64,10 +64,18 @@ export default async function MyAccountPage({
     ),
   ]);
 
+  const allCharges = allChargesResult.rows.map((row) => ({
+    ...row,
+    original_amount: Number(row.original_amount),
+    outstanding_amount: Number(row.outstanding_amount),
+  }));
+  const openCharges = allCharges.filter((charge) => charge.status === "open" && charge.outstanding_amount > 0);
+
   return (
     <AccountStatementClient
       account={account}
-      charges={chargesResult.rows.map((row) => ({ ...row, original_amount: Number(row.original_amount), outstanding_amount: Number(row.outstanding_amount) }))}
+      charges={openCharges}
+      allCharges={allCharges}
       payments={paymentsResult.rows.map((row) => ({ ...row, amount: Number(row.amount) }))}
       paymentResult={payment === "success" ? "success" : payment === "cancelled" ? "cancelled" : null}
       sessionId={session_id || null}
