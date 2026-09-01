@@ -39,6 +39,7 @@ export async function createMercadoPagoPreference(params: {
   email: string;
   kind: "billing" | "donation" | "event";
   returnPath: string;
+  expirationMinutes?: number;
 }): Promise<{ id: string; url: string }> {
   const origin = siteOrigin();
   const internal = encodeURIComponent(params.paymentId);
@@ -67,7 +68,7 @@ export async function createMercadoPagoPreference(params: {
       notification_url: `${origin}/api/webhooks/mercadopago`,
       expires: true,
       expiration_date_from: new Date().toISOString(),
-      expiration_date_to: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      expiration_date_to: new Date(Date.now() + (params.expirationMinutes ?? 30) * 60 * 1000).toISOString(),
     }),
   });
   if (!result.id || !result.init_point) throw new Error("Mercado Pago no devolvió una página de pago");

@@ -27,6 +27,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (!event.published || !event.reservations_open) throw new Error("RESERVATIONS_CLOSED");
       const unitPrice = Number(event.seat_price ?? 0);
       if (unitPrice > 0 && !useMercadoPago && !stripeConfigured()) throw new Error("PAYMENTS_UNAVAILABLE");
+      const holdMinutes = useMercadoPago ? 10 : 30;
 
       const stale = await client.query<{ payment_id: string | null; seat_id: string | null }>(
         `SELECT payment_id, seat_id FROM event_reservations
@@ -76,9 +77,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             (user_id, amount, currency, status, payment_method, donor_name, donor_email,
              description, metadata, expires_at)
            VALUES ($1, $2, 'MXN', 'pending', $7, $3, $4, $5,
-                   jsonb_build_object('kind', 'event', 'event_id', $6::text), NOW() + INTERVAL '30 minutes')
+                   jsonb_build_object('kind', 'event', 'event_id', $6::text), NOW() + ($8::INT * INTERVAL '1 minute'))
            RETURNING id`,
-          [user.id, total, user.full_name || user.email, user.email, `${quantity} ${quantity === 1 ? "lugar" : "lugares"} · ${event.title}`, eventId, useMercadoPago ? "mercadopago" : "stripe"],
+          [user.id, total, user.full_name || user.email, user.email, `${quantity} ${quantity === 1 ? "lugar" : "lugares"} · ${event.title}`, eventId, useMercadoPago ? "mercadopago" : "stripe", holdMinutes],
         );
         paymentId = payment.rows[0].id;
         pendingPaymentId = paymentId;
@@ -90,18 +91,18 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
           `INSERT INTO event_reservations
             (event_id, user_id, seat_id, holder_name, holder_email, holder_phone, unit_price, status, expires_at, payment_id)
            SELECT $1, $2, selected_seat_id, $4, $5, $6, $7, $8,
-                  CASE WHEN $8 = 'pending' THEN NOW() + INTERVAL '30 minutes' ELSE NULL END, $9
+                  CASE WHEN $8 = 'pending' THEN NOW() + ($10::INT * INTERVAL '1 minute') ELSE NULL END, $9
              FROM unnest($3::uuid[]) AS selected_seat_id
            RETURNING id, event_id, seat_id, created_at`,
-          [eventId, user.id, seats.map((seat) => seat.id), user.full_name || user.email, user.email, user.phone, unitPrice, status, paymentId],
+          [eventId, user.id, seats.map((seat) => seat.id), user.full_name || user.email, user.email, user.phone, unitPrice, status, paymentId, holdMinutes],
         )
         : await client.query<{ id: string; event_id: string; seat_id: string | null; created_at: Date }>(
           `INSERT INTO event_reservations
             (event_id, user_id, seat_id, holder_name, holder_email, holder_phone, unit_price, status, expires_at, payment_id)
            VALUES ($1, $2, NULL, $3, $4, $5, $6, $7,
-                   CASE WHEN $7 = 'pending' THEN NOW() + INTERVAL '30 minutes' ELSE NULL END, $8)
+                   CASE WHEN $7 = 'pending' THEN NOW() + ($9::INT * INTERVAL '1 minute') ELSE NULL END, $8)
            RETURNING id, event_id, seat_id, created_at`,
-          [eventId, user.id, user.full_name || user.email, user.email, user.phone, unitPrice, status, paymentId],
+          [eventId, user.id, user.full_name || user.email, user.email, user.phone, unitPrice, status, paymentId, holdMinutes],
         );
       if (seats.length) await client.query("UPDATE event_seats SET status = 'occupied' WHERE id = ANY($1::uuid[])", [seats.map((seat) => seat.id)]);
       const labels = seats.map((seat) => seat.x !== null ? seat.row_label : `${seat.row_label}${seat.seat_number}`);
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     if (result.paymentId) {
       if (useMercadoPago) {
-        const preference = await createMercadoPagoPreference({ paymentId: result.paymentId, title: result.event.title, description: result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre", amount: result.total, email: user.email, kind: "event", returnPath: `/eventos/${eventId}` });
+        const preference = await createMercadoPagoPreference({ paymentId: result.paymentId, title: result.event.title, description: result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre", amount: result.total, email: user.email, kind: "event", returnPath: `/eventos/${eventId}`, expirationMinutes: 10 });
         await query("UPDATE payments SET mercadopago_preference_id = $2, updated_at = NOW() WHERE id = $1", [result.paymentId, preference.id]);
         return NextResponse.json({ ok: true, requiresPayment: true, url: preference.url, provider: "mercadopago" });
       }

@@ -2,16 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Armchair, CheckCircle2, Loader2, Users } from "lucide-react";
+import { AlertTriangle, Armchair, CheckCircle2, Loader2, Users } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
 import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null };
+type PendingPayment = { id: string; expires_at: string; seats: string[] };
 
-export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, reservedCount, paymentResult, sessionId, internalPaymentId, providerPaymentId, cancelledPaymentId }: {
+export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, pendingPayment: initialPendingPayment, reservedCount, paymentResult, sessionId, internalPaymentId, providerPaymentId, cancelledPaymentId }: {
   eventId: string; mode: "none" | "open" | "assigned"; planType: SeatPlanType; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
-  seatPrice: number; reservationsOpen: boolean; existingReservations: Reservation[]; reservedCount: number;
+  seatPrice: number; reservationsOpen: boolean; existingReservations: Reservation[]; pendingPayment: PendingPayment | null; reservedCount: number;
   paymentResult: "success" | "cancelled" | null; sessionId: string | null; internalPaymentId: string | null; providerPaymentId: string | null; cancelledPaymentId: string | null;
 }) {
   const router = useRouter();
@@ -21,6 +22,8 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   const [count, setCount] = useState(reservedCount);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pendingPayment, setPendingPayment] = useState(initialPendingPayment);
+  const [cancellingPending, setCancellingPending] = useState(false);
   const hasMap = seats.length > 0 && seats.every((seat) => seat.x !== null && seat.y !== null);
   const rows = useMemo(() => {
     const grouped = new Map<string, Seat[]>();
@@ -49,6 +52,29 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
     };
     void check();
   }, [cancelledPaymentId, eventId, internalPaymentId, paymentResult, providerPaymentId, router, sessionId]);
+
+  useEffect(() => {
+    const refreshAfterCheckout = (event: PageTransitionEvent) => { if (event.persisted) router.refresh(); };
+    window.addEventListener("pageshow", refreshAfterCheckout);
+    return () => window.removeEventListener("pageshow", refreshAfterCheckout);
+  }, [router]);
+
+  async function releasePendingPayment() {
+    if (!pendingPayment) return;
+    setCancellingPending(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/events/${eventId}/reserve`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payment_id: pendingPayment.id }) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "No fue posible liberar los asientos");
+      setPendingPayment(null);
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No fue posible liberar los asientos");
+    } finally {
+      setCancellingPending(false);
+    }
+  }
 
   async function reserve() {
     setLoading(true); setError("");
@@ -84,6 +110,18 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
       {mode === "assigned" ? (
         <><p className="mt-2 text-ink-soft">Asientos <strong>{reservations.map((item) => item.x !== null ? item.row_label : `${item.row_label ?? ""}${item.seat_number ?? ""}`).join(", ")}</strong></p>{seatPrice > 0 ? <p className="mt-2 text-sm font-semibold text-navy">Total: ${(seatPrice * reservations.length).toLocaleString("es-MX")} MXN</p> : null}</>
       ) : <p className="mt-2 text-ink-soft">Tu acceso es de lugar libre; al llegar podrás ocupar el lugar disponible que prefieras.</p>}
+    </div>
+  );
+
+  if (pendingPayment) return (
+    <div className="border border-amber-300 bg-amber-50 p-7">
+      <div className="flex items-start gap-4"><AlertTriangle className="mt-1 h-7 w-7 shrink-0 text-amber-700" /><div>
+        <h2 className="font-serif text-2xl font-bold text-navy">Pago pendiente — reservación no confirmada</h2>
+        <p className="mt-2 text-sm leading-relaxed text-ink-soft">Los asientos <strong>{pendingPayment.seats.filter(Boolean).join(", ") || "seleccionados"}</strong> están apartados temporalmente mientras se completa Mercado Pago. No están reservados definitivamente y no aparecerán como pagados.</p>
+        <p className="mt-2 text-xs font-semibold text-amber-800">El apartado vence a las {new Date(pendingPayment.expires_at).toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit", timeZone: "America/Mexico_City" })}. Si cerraste Mercado Pago, libéralos ahora.</p>
+        <button type="button" onClick={releasePendingPayment} disabled={cancellingPending} className="mt-5 inline-flex min-h-11 items-center justify-center border border-amber-700 px-5 text-xs font-bold uppercase tracking-[0.14em] text-amber-900 hover:bg-amber-100 disabled:opacity-50">{cancellingPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cancelar intento y liberar asientos"}</button>
+        {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
+      </div></div>
     </div>
   );
 
