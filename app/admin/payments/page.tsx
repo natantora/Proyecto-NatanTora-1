@@ -74,39 +74,69 @@ export default async function AdminPaymentsPage() {
       <Stat icon={AlertTriangle} label="No completados" value={String(failedCount)} />
       <Stat icon={RotateCcw} label="Reembolsos / contracargos" value={String(reversalCount)} />
     </div>
-    <div className="overflow-x-auto rounded-xl border border-midrash-100 bg-white">
-      <table className="w-full min-w-[1480px] divide-y divide-midrash-100 text-sm">
-        <thead className="bg-midrash-50"><tr>{["Fecha", "Tipo", "Persona", "Concepto", "Método", "Monto", "Resultado", "Estado del proveedor", "Referencias"].map((label) => <th key={label} className={`px-4 py-3 text-xs font-semibold uppercase text-midrash-600 ${label === "Monto" ? "text-right" : "text-left"}`}>{label}</th>)}</tr></thead>
+    <div className="space-y-3 xl:hidden">
+      {!payments.length ? <div className="rounded-xl border border-midrash-100 bg-white px-4 py-10 text-center text-midrash-500">Todavía no hay movimientos.</div> : null}
+      {payments.map((payment) => {
+        const kind = typeof payment.metadata?.kind === "string" ? payment.metadata.kind : payment.billing_account_id ? "billing" : "donation";
+        const moment = new Date(payment.paid_at ?? payment.created_at);
+        return <article key={payment.id} className="rounded-xl border border-midrash-100 bg-white p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div><div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-midrash-400">Resultado del pago</div><div className="mt-1"><PaymentStatusBadge payment={payment} /></div></div>
+            <div className="text-right"><div className="text-lg font-bold text-navy">{formatMXN(Number(payment.amount))}</div><div className="text-[10px] text-midrash-400">{moment.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short", timeZone: "America/Mexico_City" })}</div></div>
+          </div>
+          <div className="mt-4 grid gap-3 border-t border-midrash-100 pt-4 sm:grid-cols-2">
+            <div><div className="font-semibold text-navy">{payment.account_name || payment.donor_name || "Sin nombre"}</div><div className="break-all text-xs text-midrash-500">{payment.donor_email || "Sin correo"}</div></div>
+            <div><div className="text-[10px] font-semibold uppercase tracking-wide text-midrash-400">{kindLabel[kind] ?? "Pago"}</div><div className="text-sm text-midrash-700">{payment.event_title || payment.description || "Pago"}</div></div>
+            <div><div className="text-[10px] font-semibold uppercase tracking-wide text-midrash-400">Mercado Pago</div><ProviderStatusInfo payment={payment} /></div>
+            <div><div className="text-[10px] font-semibold uppercase tracking-wide text-midrash-400">Referencias</div><PaymentReferences payment={payment} /></div>
+          </div>
+        </article>;
+      })}
+    </div>
+    <div className="hidden overflow-x-auto rounded-xl border border-midrash-100 bg-white xl:block">
+      <table className="w-full min-w-[1380px] divide-y divide-midrash-100 text-sm">
+        <thead className="bg-midrash-50"><tr>{["Fecha", "Resultado", "Persona", "Concepto", "Monto", "Estado de Mercado Pago", "Método", "Referencias"].map((label) => <th key={label} className={`px-4 py-3 text-xs font-semibold uppercase text-midrash-600 ${label === "Monto" ? "text-right" : "text-left"}`}>{label}</th>)}</tr></thead>
         <tbody className="divide-y divide-midrash-100">
-          {!payments.length ? <tr><td colSpan={9} className="px-4 py-10 text-center text-midrash-500">Todavía no hay movimientos.</td></tr> : null}
+          {!payments.length ? <tr><td colSpan={8} className="px-4 py-10 text-center text-midrash-500">Todavía no hay movimientos.</td></tr> : null}
           {payments.map((payment) => {
             const kind = typeof payment.metadata?.kind === "string" ? payment.metadata.kind : payment.billing_account_id ? "billing" : "donation";
             const moment = new Date(payment.paid_at ?? payment.created_at);
             return <tr key={payment.id} className="align-top">
               <td className="whitespace-nowrap px-4 py-3 text-midrash-600"><div>{moment.toLocaleDateString("es-MX", { dateStyle: "medium", timeZone: "America/Mexico_City" })}</div><div className="text-xs text-midrash-400">{moment.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: "America/Mexico_City" })}</div></td>
-              <td className="px-4 py-3"><div className="font-semibold text-navy">{kindLabel[kind] ?? "Pago"}</div>{payment.metadata?.frequency === "monthly" ? <div className="text-xs text-gold-deep">Mensual</div> : null}</td>
+              <td className="px-4 py-3"><PaymentStatusBadge payment={payment} /></td>
               <td className="px-4 py-3"><div className="font-medium text-midrash-900">{payment.account_name || payment.donor_name || "—"}</div><div className="max-w-[220px] break-all text-xs text-midrash-500">{payment.donor_email ?? ""}</div></td>
-              <td className="max-w-[280px] px-4 py-3 text-midrash-700">{payment.event_title || payment.description || (kind === "donation" ? "Apoyo general" : "Pago")}</td>
-              <td className="px-4 py-3 text-midrash-600">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "mercadopago" ? "Mercado Pago" : payment.payment_method === "stripe" ? "Stripe" : payment.payment_method || "—"}</td>
+              <td className="max-w-[280px] px-4 py-3 text-midrash-700"><div className="font-semibold text-navy">{kindLabel[kind] ?? "Pago"}</div><div>{payment.event_title || payment.description || (kind === "donation" ? "Apoyo general" : "Pago")}</div>{payment.metadata?.frequency === "monthly" ? <div className="text-xs text-gold-deep">Mensual</div> : null}</td>
               <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-navy">{formatMXN(Number(payment.amount))}</td>
-              <td className="px-4 py-3"><span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", statusColor(payment.status))}>{localStatus(payment)}</span></td>
-              <td className="px-4 py-3">
-                {payment.provider_status ? <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", statusColor(payment.provider_status))}>{providerStatusLabel[payment.provider_status] ?? payment.provider_status}</span> : <span className="text-midrash-400">—</span>}
-                {payment.provider_status_detail ? <div title={payment.provider_status_detail} className="mt-1 max-w-[210px] truncate font-mono text-[10px] text-midrash-500">{payment.provider_status_detail}</div> : null}
-                {payment.provider_updated_at ? <div className="mt-1 text-[10px] text-midrash-400">Actualizado {new Date(payment.provider_updated_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short", timeZone: "America/Mexico_City" })}</div> : null}
-              </td>
-              <td className="px-4 py-3 font-mono text-[10px] text-midrash-500">
-                {payment.mercadopago_payment_id ? <Reference label="Pago MP" value={payment.mercadopago_payment_id} /> : null}
-                {payment.mercadopago_preference_id ? <Reference label="Preferencia" value={payment.mercadopago_preference_id} /> : null}
-                {payment.stripe_payment_intent ? <Reference label="Pago Stripe" value={payment.stripe_payment_intent} /> : null}
-                {payment.stripe_subscription_id ? <Reference label="Suscripción" value={payment.stripe_subscription_id} /> : null}
-                <Reference label="Interno" value={payment.id} />
-              </td>
+              <td className="px-4 py-3"><ProviderStatusInfo payment={payment} /></td>
+              <td className="px-4 py-3 text-midrash-600">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "mercadopago" ? "Mercado Pago" : payment.payment_method === "stripe" ? "Stripe" : payment.payment_method || "—"}</td>
+              <td className="px-4 py-3"><PaymentReferences payment={payment} /></td>
             </tr>;
           })}
         </tbody>
       </table>
     </div>
+  </div>;
+}
+
+function PaymentStatusBadge({ payment }: { payment: PaymentRow }) {
+  return <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", statusColor(payment.status))}>{localStatus(payment)}</span>;
+}
+
+function ProviderStatusInfo({ payment }: { payment: PaymentRow }) {
+  return <div>
+    {payment.provider_status ? <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", statusColor(payment.provider_status))}>{providerStatusLabel[payment.provider_status] ?? payment.provider_status}</span> : <span className="text-xs text-midrash-400">Sin respuesta del proveedor</span>}
+    {payment.provider_status_detail ? <div title={payment.provider_status_detail} className="mt-1 max-w-[220px] truncate font-mono text-[10px] text-midrash-500">{payment.provider_status_detail}</div> : null}
+    {payment.provider_updated_at ? <div className="mt-1 text-[10px] text-midrash-400">Actualizado {new Date(payment.provider_updated_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short", timeZone: "America/Mexico_City" })}</div> : null}
+  </div>;
+}
+
+function PaymentReferences({ payment }: { payment: PaymentRow }) {
+  return <div className="font-mono text-[10px] text-midrash-500">
+    {payment.mercadopago_payment_id ? <Reference label="Pago MP" value={payment.mercadopago_payment_id} /> : null}
+    {payment.mercadopago_preference_id ? <Reference label="Preferencia" value={payment.mercadopago_preference_id} /> : null}
+    {payment.stripe_payment_intent ? <Reference label="Pago Stripe" value={payment.stripe_payment_intent} /> : null}
+    {payment.stripe_subscription_id ? <Reference label="Suscripción" value={payment.stripe_subscription_id} /> : null}
+    <Reference label="Interno" value={payment.id} />
   </div>;
 }
 
