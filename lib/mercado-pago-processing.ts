@@ -1,8 +1,65 @@
 import { applyBillingPayment } from "@/lib/billing";
 import { query, transaction } from "@/lib/db";
 import { sendDonationReceipt, sendPaymentReceipt, sendReservationConfirmation } from "@/lib/transactional-emails";
+import type { MercadoPagoPayment } from "@/lib/mercado-pago";
+import { failPendingPayment } from "@/lib/payment-processing";
 
 type PaymentKind = "billing" | "donation" | "event";
+
+async function markMercadoPagoReversal(paymentId: string, status: "refunded" | "charged_back"): Promise<void> {
+  await transaction(async (client) => {
+    const payment = await client.query<{ status: string; metadata: Record<string, unknown> }>(
+      "SELECT status, metadata FROM payments WHERE id = $1 FOR UPDATE",
+      [paymentId],
+    );
+    if (!payment.rows[0] || payment.rows[0].status === status) return;
+    if (payment.rows[0].status === "pending") {
+      const seats = await client.query<{ seat_id: string | null }>(
+        "SELECT seat_id FROM event_reservations WHERE payment_id = $1 AND status = 'pending' FOR UPDATE",
+        [paymentId],
+      );
+      const seatIds = seats.rows.map((row) => row.seat_id).filter((id): id is string => Boolean(id));
+      if (seatIds.length) await client.query("UPDATE event_seats SET status = 'available' WHERE id = ANY($1::uuid[])", [seatIds]);
+      await client.query("UPDATE event_reservations SET status = 'expired' WHERE payment_id = $1 AND status = 'pending'", [paymentId]);
+    } else if (payment.rows[0].status === "paid" && payment.rows[0].metadata?.kind === "billing") {
+      const allocations = await client.query<{ charge_id: string; amount: string }>(
+        "SELECT charge_id, amount::text FROM billing_payment_allocations WHERE payment_id = $1 ORDER BY charge_id",
+        [paymentId],
+      );
+      for (const allocation of allocations.rows) {
+        await client.query(
+          `UPDATE billing_charges
+              SET outstanding_amount = LEAST(original_amount, outstanding_amount + $2),
+                  status = 'open', updated_at = NOW()
+            WHERE id = $1`,
+          [allocation.charge_id, Number(allocation.amount)],
+        );
+      }
+    }
+    await client.query("UPDATE payments SET status = $2, updated_at = NOW() WHERE id = $1", [paymentId, status]);
+  });
+}
+
+export async function reconcileMercadoPagoPayment(paymentId: string, remote: MercadoPagoPayment): Promise<void> {
+  await query(
+    `UPDATE payments
+        SET payment_method = 'mercadopago',
+            mercadopago_payment_id = COALESCE(mercadopago_payment_id, $2),
+            provider_status = $3,
+            provider_status_detail = $4,
+            provider_updated_at = COALESCE($5::timestamptz, NOW()),
+            updated_at = NOW()
+      WHERE id = $1`,
+    [paymentId, String(remote.id), remote.status, remote.status_detail || null, remote.date_last_updated || null],
+  );
+  if (remote.status === "approved") {
+    await finalizeMercadoPagoPayment(paymentId, String(remote.id));
+  } else if (["rejected", "cancelled"].includes(remote.status)) {
+    await failPendingPayment(paymentId);
+  } else if (remote.status === "refunded" || remote.status === "charged_back") {
+    await markMercadoPagoReversal(paymentId, remote.status);
+  }
+}
 
 export async function finalizeMercadoPagoPayment(paymentId: string, providerPaymentId: string): Promise<boolean> {
   const payment = await query<{ metadata: Record<string, unknown>; payment_method: string | null }>(
@@ -13,7 +70,8 @@ export async function finalizeMercadoPagoPayment(paymentId: string, providerPaym
   if (!kind || !["billing", "donation", "event"].includes(kind)) return false;
   await query(
     `UPDATE payments SET payment_method = 'mercadopago',
-       mercadopago_payment_id = COALESCE(mercadopago_payment_id, $2), updated_at = NOW()
+       mercadopago_payment_id = COALESCE(mercadopago_payment_id, $2),
+       provider_status = 'approved', provider_updated_at = NOW(), updated_at = NOW()
      WHERE id = $1`,
     [paymentId, providerPaymentId],
   );

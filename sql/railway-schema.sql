@@ -389,7 +389,7 @@ CREATE TABLE IF NOT EXISTS payments (
   amount NUMERIC(10,2) NOT NULL,
   currency TEXT NOT NULL DEFAULT 'MXN',
   status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending','paid','failed','refunded')),
+    CHECK (status IN ('pending','paid','failed','refunded','charged_back')),
   payment_method TEXT,
   stripe_session_id TEXT,
   stripe_payment_intent TEXT,
@@ -473,7 +473,13 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_invoice_id TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS mercadopago_preference_id TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS mercadopago_payment_id TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS provider_status TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS provider_status_detail TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS provider_updated_at TIMESTAMPTZ;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_status_check;
+ALTER TABLE payments ADD CONSTRAINT payments_status_check
+  CHECK (status IN ('pending','paid','failed','refunded','charged_back'));
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_stripe_session
   ON payments(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_stripe_invoice
@@ -488,6 +494,18 @@ CREATE INDEX IF NOT EXISTS idx_payments_billing_account
   ON payments(billing_account_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payments_pending_expiry
   ON payments(expires_at) WHERE status = 'pending' AND expires_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_payments_provider_status
+  ON payments(provider_status, provider_updated_at DESC)
+  WHERE provider_status IS NOT NULL;
+UPDATE payments
+   SET provider_status = CASE status
+     WHEN 'paid' THEN 'approved'
+     ELSE status
+   END,
+       provider_updated_at = COALESCE(provider_updated_at, updated_at, created_at)
+ WHERE payment_method = 'mercadopago'
+   AND provider_status IS NULL
+   AND status <> 'failed';
 
 -- Las reservaciones gratuitas se confirman al instante. Las reservaciones con
 -- precio se mantienen temporalmente mientras Stripe procesa el pago y solo se

@@ -103,7 +103,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     if (result.paymentId) {
       if (useMercadoPago) {
         const preference = await createMercadoPagoPreference({ paymentId: result.paymentId, title: result.event.title, description: result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre", amount: result.total, email: user.email, kind: "event", returnPath: `/eventos/${eventId}`, expirationMinutes: 10 });
-        await query("UPDATE payments SET mercadopago_preference_id = $2, updated_at = NOW() WHERE id = $1", [result.paymentId, preference.id]);
+        await query("UPDATE payments SET mercadopago_preference_id = $2, provider_status = 'pending', provider_updated_at = NOW(), updated_at = NOW() WHERE id = $1", [result.paymentId, preference.id]);
         return NextResponse.json({ ok: true, requiresPayment: true, url: preference.url, provider: "mercadopago" });
       }
       const commonMetadata = { payment_id: result.paymentId, payment_kind: "event", event_id: eventId, user_id: user.id };

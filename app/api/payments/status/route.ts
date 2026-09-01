@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { getMercadoPagoPayment, mercadoPagoConfigured } from "@/lib/mercado-pago";
-import { finalizeMercadoPagoPayment } from "@/lib/mercado-pago-processing";
+import { reconcileMercadoPagoPayment } from "@/lib/mercado-pago-processing";
 import { failCheckoutSession, failPendingPayment, finalizeCheckoutSession } from "@/lib/payment-processing";
 import { clientIp, isRateLimited } from "@/lib/rate-limit";
 import { stripeClient, stripeConfigured } from "@/lib/stripe";
@@ -29,8 +29,8 @@ export async function GET(req: NextRequest) {
   if (status === "pending" && internalPaymentId && mercadoPagoConfigured() && (providerPaymentId || payment.rows[0].mercadopago_payment_id)) {
     try {
       const remote = await getMercadoPagoPayment(providerPaymentId || payment.rows[0].mercadopago_payment_id || "");
-      if ((remote.external_reference || remote.metadata?.payment_id) === payment.rows[0].id && remote.status === "approved") {
-        await finalizeMercadoPagoPayment(payment.rows[0].id, String(remote.id));
+      if ((remote.external_reference || remote.metadata?.payment_id) === payment.rows[0].id) {
+        await reconcileMercadoPagoPayment(payment.rows[0].id, remote);
       }
       const refreshed = await query<{ status: string }>("SELECT status FROM payments WHERE id = $1", [payment.rows[0].id]);
       status = refreshed.rows[0]?.status ?? status;

@@ -78,6 +78,8 @@ export async function createMercadoPagoPreference(params: {
 export type MercadoPagoPayment = {
   id: number | string;
   status: string;
+  status_detail?: string | null;
+  date_last_updated?: string | null;
   external_reference?: string | null;
   metadata?: { payment_id?: string; payment_kind?: string };
 };

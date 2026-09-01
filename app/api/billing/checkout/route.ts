@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     if (useMercadoPago) {
       const preference = await createMercadoPagoPreference({ paymentId: pending.paymentId, title: "Estado de cuenta Natán Torá", description: pending.description, amount: pending.amount, email: user.email, kind: "billing", returnPath: "/mi-cuenta" });
-      await query("UPDATE payments SET mercadopago_preference_id = $2, updated_at = NOW() WHERE id = $1", [pending.paymentId, preference.id]);
+      await query("UPDATE payments SET mercadopago_preference_id = $2, provider_status = 'pending', provider_updated_at = NOW(), updated_at = NOW() WHERE id = $1", [pending.paymentId, preference.id]);
       return NextResponse.json({ url: preference.url, provider: "mercadopago" });
     }
     const stripe = stripeClient();

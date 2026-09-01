@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMercadoPagoPayment, verifyMercadoPagoSignature } from "@/lib/mercado-pago";
-import { finalizeMercadoPagoPayment } from "@/lib/mercado-pago-processing";
-import { failPendingPayment } from "@/lib/payment-processing";
+import { reconcileMercadoPagoPayment } from "@/lib/mercado-pago-processing";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -15,8 +14,7 @@ export async function POST(req: NextRequest) {
     const remote = await getMercadoPagoPayment(dataId);
     const paymentId = remote.external_reference || remote.metadata?.payment_id;
     if (!paymentId) return NextResponse.json({ received: true });
-    if (remote.status === "approved") await finalizeMercadoPagoPayment(paymentId, String(remote.id));
-    else if (["rejected", "cancelled", "refunded", "charged_back"].includes(remote.status)) await failPendingPayment(paymentId);
+    await reconcileMercadoPagoPayment(paymentId, remote);
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error("[mercadopago/webhook]", dataId, error);
