@@ -198,6 +198,14 @@ type DonationReceiptEmailParams = {
   siteUrl: string;
 };
 
+type PaymentFailureEmailParams = {
+  memberName: string;
+  amount: number;
+  description: string;
+  details: string[];
+  retryUrl: string;
+};
+
 type PasswordResetEmailParams = {
   memberName: string;
   resetUrl: string;
@@ -315,6 +323,22 @@ export function donationReceiptEmail(p: DonationReceiptEmailParams): string {
     ],
     buttonLabel: "Volver al sitio",
     buttonUrl: p.siteUrl,
+  });
+}
+
+export function paymentFailureEmail(p: PaymentFailureEmailParams): string {
+  return transactionalEmail({
+    preview: `Pago no completado por ${formatMoney(p.amount)}`,
+    eyebrow: "Pago no completado",
+    title: "Tu pago no pudo confirmarse",
+    body: `Hola, ${escapeHtml(p.memberName)}. La plataforma de pago no confirmó esta operación. No registramos el pago y cualquier asiento retenido para este intento quedó liberado.<br><br>Puedes volver a intentarlo desde el sitio. Si ves un cargo en tu banco, comunícate con la administración antes de realizar otro pago.`,
+    details: [
+      ["Importe", formatMoney(p.amount)],
+      ["Concepto", p.description],
+      ...(p.details.length ? [["Detalle", p.details.join(", ")] as [string, string]] : []),
+    ],
+    buttonLabel: "Intentar nuevamente",
+    buttonUrl: p.retryUrl,
   });
 }
 

@@ -25,6 +25,11 @@ export default function AccountStatementClient({ account, charges, allCharges, p
   const selectedTotal = useMemo(() => charges.filter((charge) => selected.has(charge.id)).reduce((sum, charge) => sum + charge.outstanding_amount, 0), [charges, selected]);
 
   useEffect(() => {
+    if (paymentResult === "cancelled" && internalPaymentId) {
+      void fetch(`/api/payments/status?internal_payment_id=${encodeURIComponent(internalPaymentId)}`, { method: "DELETE" })
+        .finally(() => router.refresh());
+      return;
+    }
     if (paymentResult !== "success" || (!sessionId && !internalPaymentId)) return;
     let attempts = 0;
     const check = async () => {

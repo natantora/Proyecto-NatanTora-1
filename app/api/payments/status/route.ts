@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { getMercadoPagoPayment, mercadoPagoConfigured } from "@/lib/mercado-pago";
 import { finalizeMercadoPagoPayment } from "@/lib/mercado-pago-processing";
-import { failCheckoutSession, finalizeCheckoutSession } from "@/lib/payment-processing";
+import { failCheckoutSession, failPendingPayment, finalizeCheckoutSession } from "@/lib/payment-processing";
 import { clientIp, isRateLimited } from "@/lib/rate-limit";
 import { stripeClient, stripeConfigured } from "@/lib/stripe";
 
@@ -49,4 +49,20 @@ export async function GET(req: NextRequest) {
     }
   }
   return NextResponse.json({ status, kind: payment.rows[0].metadata?.kind ?? null });
+}
+
+export async function DELETE(req: NextRequest) {
+  if (isRateLimited(`payment-cancel:${clientIp(req)}`, 20, 5 * 60 * 1000)) {
+    return NextResponse.json({ error: "Demasiados intentos" }, { status: 429 });
+  }
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const paymentId = req.nextUrl.searchParams.get("internal_payment_id")?.trim() || "";
+  if (!paymentId) return NextResponse.json({ error: "Pago inválido" }, { status: 400 });
+  const payment = await query<{ id: string }>(
+    "SELECT id FROM payments WHERE id = $1 AND user_id = $2 AND status = 'pending' LIMIT 1",
+    [paymentId, user.id],
+  );
+  if (payment.rows[0]) await failPendingPayment(payment.rows[0].id);
+  return NextResponse.json({ ok: true });
 }

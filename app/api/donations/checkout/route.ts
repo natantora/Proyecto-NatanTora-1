@@ -5,6 +5,7 @@ import { query } from "@/lib/db";
 import { clientIp, isRateLimited } from "@/lib/rate-limit";
 import { createMercadoPagoPreference, mercadoPagoConfigured } from "@/lib/mercado-pago";
 import { publicSiteUrl, stripeClient, stripeConfigured } from "@/lib/stripe";
+import { failPendingPayment } from "@/lib/payment-processing";
 
 const PURPOSES: Record<string, string> = {
   general: "Apoyo general al Midrash",
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
     await query("UPDATE payments SET stripe_session_id = $2, updated_at = NOW() WHERE id = $1", [paymentId, session.id]);
     return NextResponse.json({ url: session.url, provider: "stripe" });
   } catch (error) {
-    await query("UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1", [paymentId]).catch(() => undefined);
+    await failPendingPayment(paymentId).catch(() => undefined);
     console.error("[donations/checkout]", error);
     return NextResponse.json({ error: "No fue posible abrir el pago seguro." }, { status: 500 });
   }

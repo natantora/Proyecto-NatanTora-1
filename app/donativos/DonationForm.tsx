@@ -13,6 +13,10 @@ export default function DonationForm({ paymentResult, sessionId, internalPayment
   const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
+    if (paymentResult === "cancelled" && internalPaymentId) {
+      void fetch(`/api/payments/status?internal_payment_id=${encodeURIComponent(internalPaymentId)}`, { method: "DELETE" });
+      return;
+    }
     if (paymentResult !== "success" || (!sessionId && !internalPaymentId)) return;
     let attempts = 0;
     const check = async () => {

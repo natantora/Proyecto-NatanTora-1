@@ -2,6 +2,7 @@ import { sendEmail } from "@/lib/email";
 import {
   memberDecisionEmail,
   donationReceiptEmail,
+  paymentFailureEmail,
   paymentReceiptEmail,
   reservationCancellationEmail,
   reservationConfirmationEmail,
@@ -86,5 +87,21 @@ export async function sendDonationReceipt(params: {
     subject: `Gracias por tu donativo — ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(params.amount)}`,
     html: donationReceiptEmail({ ...params, siteUrl: `${siteOrigin()}/donativos` }),
     text: `Gracias por tu donativo de ${params.amount.toFixed(2)} MXN para ${params.purpose}.`,
+  });
+}
+
+export async function sendPaymentFailure(params: {
+  email: string;
+  memberName: string;
+  amount: number;
+  description: string;
+  details: string[];
+  retryPath: string;
+}) {
+  return sendEmail({
+    to: params.email,
+    subject: `Pago no completado — ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(params.amount)}`,
+    html: paymentFailureEmail({ ...params, retryUrl: `${siteOrigin()}${params.retryPath}` }),
+    text: `Hola ${params.memberName}. Tu pago de ${params.amount.toFixed(2)} MXN por ${params.description} no pudo confirmarse. No registramos el pago. Puedes intentarlo nuevamente en ${siteOrigin()}${params.retryPath}`,
   });
 }

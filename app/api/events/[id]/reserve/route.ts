@@ -6,6 +6,7 @@ import { clientIp, isRateLimited } from "@/lib/rate-limit";
 import { createMercadoPagoPreference, mercadoPagoConfigured } from "@/lib/mercado-pago";
 import { publicSiteUrl, stripeClient, stripeConfigured } from "@/lib/stripe";
 import { sendReservationConfirmation } from "@/lib/transactional-emails";
+import { expireStaleEventReservations } from "@/lib/event-reservation-expiry";
 
 type EventRecord = { id: string; title: string; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; capacity: number | null; published: boolean; reservations_open: boolean; seat_price: string | number };
 
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   let pendingPaymentId: string | null = null;
 
   try {
+    await expireStaleEventReservations(eventId);
     const result = await transaction(async (client) => {
       const eventResult = await client.query<EventRecord>("SELECT id, title, event_date, location, seating_mode, capacity, published, reservations_open, seat_price FROM events WHERE id = $1 FOR UPDATE", [eventId]);
       const event = eventResult.rows[0];
@@ -28,17 +30,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       const unitPrice = Number(event.seat_price ?? 0);
       if (unitPrice > 0 && !useMercadoPago && !stripeConfigured()) throw new Error("PAYMENTS_UNAVAILABLE");
       const holdMinutes = useMercadoPago ? 10 : 30;
-
-      const stale = await client.query<{ payment_id: string | null; seat_id: string | null }>(
-        `SELECT payment_id, seat_id FROM event_reservations
-          WHERE event_id = $1 AND status = 'pending' AND expires_at <= NOW() FOR UPDATE`,
-        [eventId],
-      );
-      const staleSeatIds = stale.rows.map((row) => row.seat_id).filter((id): id is string => Boolean(id));
-      const stalePaymentIds = [...new Set(stale.rows.map((row) => row.payment_id).filter((id): id is string => Boolean(id)))];
-      if (staleSeatIds.length) await client.query("UPDATE event_seats SET status = 'available' WHERE id = ANY($1::uuid[])", [staleSeatIds]);
-      if (stalePaymentIds.length) await client.query("UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = ANY($1::uuid[]) AND status = 'pending'", [stalePaymentIds]);
-      await client.query("UPDATE event_reservations SET status = 'expired' WHERE event_id = $1 AND status = 'pending' AND expires_at <= NOW()", [eventId]);
 
       const existing = await client.query(
         `SELECT id FROM event_reservations WHERE event_id = $1 AND user_id = $2

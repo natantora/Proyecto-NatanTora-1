@@ -4,6 +4,7 @@ import { cleanText } from "@/lib/billing";
 import { query, transaction } from "@/lib/db";
 import { createMercadoPagoPreference, mercadoPagoConfigured } from "@/lib/mercado-pago";
 import { publicSiteUrl, stripeClient, stripeConfigured } from "@/lib/stripe";
+import { failPendingPayment } from "@/lib/payment-processing";
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
     await query("UPDATE payments SET stripe_session_id = $2 WHERE id = $1", [pending.paymentId, session.id]);
     return NextResponse.json({ url: session.url, provider: "stripe" });
   } catch (error: unknown) {
-    if (pending?.paymentId) await query("UPDATE payments SET status = 'failed' WHERE id = $1 AND status = 'pending'", [pending.paymentId]).catch(() => undefined);
+    if (pending?.paymentId) await failPendingPayment(pending.paymentId).catch(() => undefined);
     console.error("[billing/checkout]", error);
     const publicMessages = new Set([
       "Tu usuario no tiene un estado de cuenta vinculado",

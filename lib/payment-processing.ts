@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { applyBillingPayment } from "@/lib/billing";
 import { query, transaction } from "@/lib/db";
 import { stripeClient } from "@/lib/stripe";
-import { sendDonationReceipt, sendPaymentReceipt, sendReservationConfirmation } from "@/lib/transactional-emails";
+import { sendDonationReceipt, sendPaymentFailure, sendPaymentReceipt, sendReservationConfirmation } from "@/lib/transactional-emails";
 
 type PaymentKind = "billing" | "donation" | "event";
 
@@ -159,18 +159,56 @@ export async function failCheckoutSession(session: Stripe.Checkout.Session): Pro
 }
 
 export async function failPendingPayment(paymentId: string): Promise<void> {
-  await transaction(async (client) => {
-    const payment = await client.query<{ status: string }>("SELECT status FROM payments WHERE id = $1 FOR UPDATE", [paymentId]);
+  const failed = await transaction(async (client) => {
+    const payment = await client.query<{
+      status: string; donor_email: string | null; donor_name: string | null; amount: string;
+      description: string | null; metadata: Record<string, unknown>;
+    }>(
+      `SELECT status, donor_email, donor_name, amount::text, description, metadata
+         FROM payments WHERE id = $1 FOR UPDATE`,
+      [paymentId],
+    );
     if (!payment.rows[0] || payment.rows[0].status !== "pending") return;
-    const seats = await client.query<{ seat_id: string | null }>(
-      "SELECT seat_id FROM event_reservations WHERE payment_id = $1 AND status = 'pending' FOR UPDATE",
+    const seats = await client.query<{ seat_id: string | null; seat_label: string | null }>(
+      `SELECT reservation.seat_id,
+              CASE WHEN seat.row_label IS NULL THEN NULL
+                   WHEN seat.x IS NOT NULL THEN seat.row_label
+                   ELSE seat.row_label || COALESCE(seat.seat_number::text, '') END AS seat_label
+         FROM event_reservations reservation
+    LEFT JOIN event_seats seat ON seat.id = reservation.seat_id
+        WHERE reservation.payment_id = $1 AND reservation.status = 'pending'
+        FOR UPDATE OF reservation`,
       [paymentId],
     );
     const seatIds = seats.rows.map((row) => row.seat_id).filter((id): id is string => Boolean(id));
     if (seatIds.length) await client.query("UPDATE event_seats SET status = 'available' WHERE id = ANY($1::uuid[])", [seatIds]);
     await client.query("UPDATE event_reservations SET status = 'expired' WHERE payment_id = $1 AND status = 'pending'", [paymentId]);
     await client.query("UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1", [paymentId]);
+    const concepts = await client.query<{ concept: string }>(
+      `SELECT charge.concept
+         FROM billing_payment_allocations allocation
+         JOIN billing_charges charge ON charge.id = allocation.charge_id
+        WHERE allocation.payment_id = $1
+        ORDER BY charge.created_at`,
+      [paymentId],
+    );
+    const row = payment.rows[0];
+    const kind = row.metadata?.kind;
+    const eventId = typeof row.metadata?.event_id === "string" ? row.metadata.event_id : null;
+    return {
+      email: row.donor_email,
+      memberName: row.donor_name || "Miembro",
+      amount: Number(row.amount),
+      description: row.description || "Pago en Natán Torá",
+      details: seats.rows.map((seat) => seat.seat_label).filter((label): label is string => Boolean(label)).length
+        ? seats.rows.map((seat) => seat.seat_label).filter((label): label is string => Boolean(label))
+        : concepts.rows.map((concept) => concept.concept),
+      retryPath: kind === "event" && eventId ? `/eventos/${eventId}` : kind === "donation" ? "/donativos" : "/mi-cuenta",
+    };
   });
+  if (failed?.email) {
+    await sendPaymentFailure({ ...failed, email: failed.email }).catch((error) => console.error("[payments] failure email failed:", error));
+  }
 }
 
 function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
