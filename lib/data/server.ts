@@ -7,6 +7,7 @@ const TABLES = new Set([
   "event_seats", "event_reservations",
   "billing_accounts", "billing_account_members", "billing_imports", "billing_charges",
   "billing_payment_allocations",
+  "system_alerts", "financial_audit_log", "database_backups",
 ]);
 
 type Filter = { column: string; op: "=" | "IS" | ">=" | "IN"; value: unknown };

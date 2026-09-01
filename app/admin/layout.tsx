@@ -41,6 +41,7 @@ export default async function AdminLayout({
   const admin = createAdminClient();
   let pendingClassesCount = 0;
   let pendingMembersCount = 0;
+  let openAlertsCount = 0;
 
   if (canReviewClasses(role)) {
     const { count } = await admin
@@ -55,6 +56,13 @@ export default async function AdminLayout({
       .select("id", { count: "exact", head: true })
       .eq("status", "pending");
     pendingMembersCount = count ?? 0;
+  }
+  if (canManagePayments(role)) {
+    const { count } = await admin
+      .from("system_alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "open");
+    openAlertsCount = count ?? 0;
   }
 
   const nav: NavItem[] = [
@@ -110,6 +118,12 @@ export default async function AdminLayout({
       href: "/admin/payments",
       label: "Pagos",
       show: canManagePayments(role),
+    },
+    {
+      href: "/admin/control",
+      label: "Control y auditoría",
+      show: canManagePayments(role),
+      badge: openAlertsCount,
     },
   ];
 

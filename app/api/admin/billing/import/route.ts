@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { cleanEmail, cleanText, linkMatchingProfile, money, requireBillingAdmin } from "@/lib/billing";
 import { transaction } from "@/lib/db";
+import { recordFinancialAudit } from "@/lib/financial-audit";
 
 type ImportRow = {
   reference?: unknown;
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest) {
           WHERE id = $1`,
         [importId, imported, duplicates, errors],
       );
+      await recordFinancialAudit(client, { actorId: admin.user.id, action: "billing_import.completed", entityType: "billing_import", entityId: importId, after: { filename, total_rows: rows.length, imported, duplicates, errors } });
       return { import_id: importId, imported, duplicates, errors };
     });
     revalidatePath("/admin/accounts");

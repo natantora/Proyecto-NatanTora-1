@@ -3,6 +3,8 @@ import { applyBillingPayment } from "@/lib/billing";
 import { query, transaction } from "@/lib/db";
 import { stripeClient } from "@/lib/stripe";
 import { sendDonationReceipt, sendPaymentFailure, sendPaymentReceipt, sendReservationConfirmation } from "@/lib/transactional-emails";
+import { recordFinancialAudit } from "@/lib/financial-audit";
+import { reportEmailFailure } from "@/lib/system-alerts";
 
 type PaymentKind = "billing" | "donation" | "event";
 
@@ -184,6 +186,7 @@ export async function failPendingPayment(paymentId: string): Promise<void> {
     if (seatIds.length) await client.query("UPDATE event_seats SET status = 'available' WHERE id = ANY($1::uuid[])", [seatIds]);
     await client.query("UPDATE event_reservations SET status = 'expired' WHERE payment_id = $1 AND status = 'pending'", [paymentId]);
     await client.query("UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1", [paymentId]);
+    await recordFinancialAudit(client, { action: "payment.failed", entityType: "payment", entityId: paymentId, metadata: { reason: "expired_or_cancelled" } });
     const concepts = await client.query<{ concept: string }>(
       `SELECT charge.concept
          FROM billing_payment_allocations allocation
@@ -207,7 +210,8 @@ export async function failPendingPayment(paymentId: string): Promise<void> {
     };
   });
   if (failed?.email) {
-    await sendPaymentFailure({ ...failed, email: failed.email }).catch((error) => console.error("[payments] failure email failed:", error));
+    const delivery = await sendPaymentFailure({ ...failed, email: failed.email });
+    if (!delivery.ok) await reportEmailFailure("Aviso de pago no completado", delivery.error, paymentId);
   }
 }
 

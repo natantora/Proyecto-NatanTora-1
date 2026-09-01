@@ -3,6 +3,8 @@ import { revalidatePath } from "next/cache";
 import { cleanText, requireBillingAdmin } from "@/lib/billing";
 import { transaction } from "@/lib/db";
 import { sendPaymentReceipt } from "@/lib/transactional-emails";
+import { recordFinancialAudit } from "@/lib/financial-audit";
+import { reportEmailFailure } from "@/lib/system-alerts";
 
 export async function POST(req: NextRequest) {
   const admin = await requireBillingAdmin();
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
           WHERE account_id = $1`,
         [accountId],
       );
+      await recordFinancialAudit(client, { actorId: admin.user.id, action: "cash_payment.recorded", entityType: "payment", entityId: payment.rows[0].id, accountId, after: { amount, charge_ids: charges.rows.map((charge) => charge.id), concepts: appliedConcepts, notes } });
       return {
         ...payment.rows[0],
         amount,
@@ -95,12 +98,13 @@ export async function POST(req: NextRequest) {
       };
     });
     if (result.receipt) {
-      await sendPaymentReceipt({
+      const delivery = await sendPaymentReceipt({
         ...result.receipt,
         amount: result.amount,
         method: "cash",
         remainingBalance: result.open_balance,
-      }).catch((emailError) => console.error("[billing/cash] receipt email failed:", emailError));
+      });
+      if (!delivery.ok) await reportEmailFailure("Recibo de pago en efectivo", delivery.error, result.id);
     }
     revalidatePath("/admin/accounts");
     revalidatePath("/admin/payments");

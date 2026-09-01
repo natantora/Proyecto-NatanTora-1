@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { cleanEmail, cleanText, linkMatchingProfile, requireBillingAdmin } from "@/lib/billing";
 import { transaction } from "@/lib/db";
+import { recordFinancialAudit } from "@/lib/financial-audit";
 
 export async function POST(req: NextRequest) {
   const admin = await requireBillingAdmin();
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
       } else if (email) {
         await linkMatchingProfile(client, accountId, email);
       }
+      await recordFinancialAudit(client, { actorId: admin.user.id, action: "account.created", entityType: "billing_account", entityId: accountId, accountId, after: { display_name: displayName, email, phone, external_reference: externalReference, profile_id: profileId } });
       return { id: accountId };
     });
     revalidatePath("/admin/accounts");
@@ -55,6 +57,7 @@ export async function PATCH(req: NextRequest) {
   if (!accountId) return NextResponse.json({ error: "Cuenta inválida" }, { status: 400 });
   try {
     await transaction(async (client) => {
+      const before = await client.query<{ profile_id: string }>("SELECT profile_id FROM billing_account_members WHERE account_id = $1", [accountId]);
       await client.query("DELETE FROM billing_account_members WHERE account_id = $1", [accountId]);
       if (profileId) {
         await client.query(
@@ -62,6 +65,7 @@ export async function PATCH(req: NextRequest) {
           [accountId, profileId],
         );
       }
+      await recordFinancialAudit(client, { actorId: admin.user.id, action: "account.linked", entityType: "billing_account", entityId: accountId, accountId, before: { profile_ids: before.rows.map((row) => row.profile_id) }, after: { profile_id: profileId || null } });
     });
     revalidatePath("/admin/accounts");
     revalidatePath("/mi-cuenta");
@@ -84,8 +88,8 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await transaction(async (client) => {
-      const account = await client.query<{ id: string }>(
-        "SELECT id FROM billing_accounts WHERE id = $1 FOR UPDATE",
+      const account = await client.query<{ id: string; display_name: string; email: string | null; external_reference: string | null }>(
+        "SELECT id, display_name, email, external_reference FROM billing_accounts WHERE id = $1 FOR UPDATE",
         [accountId],
       );
       if (!account.rows[0]) throw new Error("Cuenta no encontrada");
@@ -101,6 +105,7 @@ export async function DELETE(req: NextRequest) {
       if (Number(history.rows[0].payments) > 0 || Number(history.rows[0].applied_charges) > 0) {
         throw new Error("Esta cuenta tiene historial de pagos y debe conservarse para la contabilidad");
       }
+      await recordFinancialAudit(client, { actorId: admin.user.id, action: "account.deleted", entityType: "billing_account", entityId: accountId, before: account.rows[0] });
       await client.query("DELETE FROM billing_accounts WHERE id = $1", [accountId]);
     });
     revalidatePath("/admin/accounts");

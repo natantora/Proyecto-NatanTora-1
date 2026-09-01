@@ -1,5 +1,6 @@
 import { query } from "@/lib/db";
 import { failPendingPayment } from "@/lib/payment-processing";
+import { reportSystemAlert } from "@/lib/system-alerts";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const BATCH_SIZE = 100;
@@ -41,9 +42,10 @@ export async function expireStalePayments(): Promise<number> {
 
 export function startPaymentExpiryWorker(): void {
   if (global.natantoraPaymentExpiryTimer || !process.env.DATABASE_URL) return;
-  const run = () => {
-    void expireStalePayments().catch((error) => console.error("[payments/expiry] ciclo fallido:", error));
-  };
+  const run = () => { void expireStalePayments().catch(async (error) => {
+    console.error("[payments/expiry] ciclo fallido:", error);
+    await reportSystemAlert({ severity: "critical", category: "payments", title: "Falló la revisión de pagos vencidos", message: error instanceof Error ? error.message : String(error), fingerprint: "payments:expiry-worker" });
+  }); };
   run();
   global.natantoraPaymentExpiryTimer = setInterval(run, CHECK_INTERVAL_MS);
   global.natantoraPaymentExpiryTimer.unref();

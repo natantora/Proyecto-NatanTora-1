@@ -597,6 +597,65 @@ CREATE TABLE IF NOT EXISTS member_status_audit (
 CREATE INDEX IF NOT EXISTS idx_member_status_audit_profile_created
   ON member_status_audit(profile_id, created_at DESC);
 
+-- Alertas operativas visibles para administración. El fingerprint permite
+-- agrupar una falla repetida sin llenar el correo ni el panel de duplicados.
+CREATE TABLE IF NOT EXISTS system_alerts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  severity TEXT NOT NULL CHECK (severity IN ('warning', 'critical')),
+  category TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  context JSONB NOT NULL DEFAULT '{}'::jsonb,
+  fingerprint TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+  occurrence_count INTEGER NOT NULL DEFAULT 1,
+  first_occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_notified_at TIMESTAMPTZ,
+  email_delivery_error TEXT,
+  resolved_at TIMESTAMPTZ,
+  resolved_by UUID REFERENCES profiles(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_system_alerts_status_date
+  ON system_alerts(status, last_occurred_at DESC);
+
+-- Bitácora financiera inmutable. Conserva quién hizo cada cambio y el estado
+-- anterior/nuevo, incluso cuando la cuenta posteriormente sea eliminada.
+CREATE TABLE IF NOT EXISTS financial_audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT,
+  account_id UUID REFERENCES billing_accounts(id) ON DELETE SET NULL,
+  before_data JSONB,
+  after_data JSONB,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_financial_audit_created
+  ON financial_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_financial_audit_account
+  ON financial_audit_log(account_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS database_backups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  backup_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  object_key TEXT,
+  status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+  table_count INTEGER NOT NULL DEFAULT 0,
+  row_count INTEGER NOT NULL DEFAULT 0,
+  size_bytes BIGINT,
+  error_message TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+ALTER TABLE database_backups ADD COLUMN IF NOT EXISTS backup_date DATE NOT NULL DEFAULT CURRENT_DATE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_database_backups_date
+  ON database_backups(backup_date);
+CREATE INDEX IF NOT EXISTS idx_database_backups_started
+  ON database_backups(started_at DESC);
+
 INSERT INTO schedules (kind, name, description, days, time, time_mode, offset_minutes, active, icon, position) VALUES
   ('rezo', 'Shajarit', 'Primer minyán', 'Lunes a Viernes', '07:00', 'fixed', 0, TRUE, '🕐', 1),
   ('rezo', 'Minha', 'Rezo de la tarde', 'Domingo a Jueves', '13:30', 'fixed', 0, TRUE, '☀️', 4),
