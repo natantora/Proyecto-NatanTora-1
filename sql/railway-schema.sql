@@ -265,6 +265,40 @@ CREATE TABLE IF NOT EXISTS app_migrations (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- La barra inferior del plano tiene cinco sillas que originalmente solo
+-- formaban parte de la imagen. Se agregan a los eventos arquitectónicos ya
+-- creados para que sean reservables sin alterar ningún lugar existente.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM app_migrations WHERE key = '2026-08-add-lower-bar-seats'
+  ) THEN
+    INSERT INTO event_seats (event_id, row_label, seat_number, status, x, y, rotation)
+    SELECT e.id, seat.label, seat.seat_number, 'available', seat.x, 440.72, 0
+      FROM events e
+      CROSS JOIN (
+        VALUES
+          ('M65', 65, 321.08::REAL),
+          ('M66', 66, 348.45::REAL),
+          ('M67', 67, 375.82::REAL),
+          ('M68', 68, 403.59::REAL),
+          ('M69', 69, 430.96::REAL)
+      ) AS seat(label, seat_number, x)
+     WHERE e.seating_mode = 'assigned'
+       AND e.seat_plan_type = 'architectural'
+    ON CONFLICT (event_id, row_label, seat_number) DO NOTHING;
+
+    UPDATE events e
+       SET capacity = (
+         SELECT COUNT(*)::INT FROM event_seats seat WHERE seat.event_id = e.id
+       )
+     WHERE e.seating_mode = 'assigned'
+       AND e.seat_plan_type = 'architectural';
+
+    INSERT INTO app_migrations (key) VALUES ('2026-08-add-lower-bar-seats');
+  END IF;
+END $$;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
