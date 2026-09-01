@@ -2,12 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { cleanText } from "@/lib/billing";
 import { query, transaction } from "@/lib/db";
+import { createMercadoPagoPreference, mercadoPagoConfigured } from "@/lib/mercado-pago";
 import { publicSiteUrl, stripeClient, stripeConfigured } from "@/lib/stripe";
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user || user.status !== "approved") return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  if (!stripeConfigured()) {
+  const useMercadoPago = mercadoPagoConfigured();
+  if (!useMercadoPago && !stripeConfigured()) {
     return NextResponse.json({ error: "El pago con tarjeta no está disponible por el momento." }, { status: 503 });
   }
   const body = await req.json().catch(() => ({}));
@@ -52,10 +54,10 @@ export async function POST(req: NextRequest) {
         `INSERT INTO payments
           (user_id, billing_account_id, amount, status, payment_method, donor_name,
            donor_email, description, metadata, expires_at)
-         VALUES ($1, $2, $3, 'pending', 'stripe', $4, $5, $6,
+         VALUES ($1, $2, $3, 'pending', $7, $4, $5, $6,
                  jsonb_build_object('kind', 'billing'), NOW() + INTERVAL '30 minutes')
          RETURNING id`,
-        [user.id, account.rows[0].id, amount, account.rows[0].display_name, account.rows[0].email || user.email, description],
+        [user.id, account.rows[0].id, amount, account.rows[0].display_name, account.rows[0].email || user.email, description, useMercadoPago ? "mercadopago" : "stripe"],
       );
       for (const charge of charges.rows) {
         await client.query(
@@ -66,6 +68,11 @@ export async function POST(req: NextRequest) {
       return { paymentId: payment.rows[0].id, amount, accountId: account.rows[0].id, description };
     });
 
+    if (useMercadoPago) {
+      const preference = await createMercadoPagoPreference({ paymentId: pending.paymentId, title: "Estado de cuenta Natán Torá", description: pending.description, amount: pending.amount, email: user.email, kind: "billing", returnPath: "/mi-cuenta" });
+      await query("UPDATE payments SET mercadopago_preference_id = $2, updated_at = NOW() WHERE id = $1", [pending.paymentId, preference.id]);
+      return NextResponse.json({ url: preference.url, provider: "mercadopago" });
+    }
     const stripe = stripeClient();
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -79,7 +86,7 @@ export async function POST(req: NextRequest) {
     }, { idempotencyKey: pending.paymentId });
     if (!session.url) throw new Error("Stripe no devolvió una dirección de pago");
     await query("UPDATE payments SET stripe_session_id = $2 WHERE id = $1", [pending.paymentId, session.id]);
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: session.url, provider: "stripe" });
   } catch (error: unknown) {
     if (pending?.paymentId) await query("UPDATE payments SET status = 'failed' WHERE id = $1 AND status = 'pending'", [pending.paymentId]).catch(() => undefined);
     console.error("[billing/checkout]", error);

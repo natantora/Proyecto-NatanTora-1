@@ -74,3 +74,41 @@ export async function PATCH(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  const admin = await requireBillingAdmin();
+  if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const body = await req.json().catch(() => ({}));
+  const accountId = cleanText(body.account_id, 80);
+  if (!accountId) return NextResponse.json({ error: "Cuenta inválida" }, { status: 400 });
+
+  try {
+    await transaction(async (client) => {
+      const account = await client.query<{ id: string }>(
+        "SELECT id FROM billing_accounts WHERE id = $1 FOR UPDATE",
+        [accountId],
+      );
+      if (!account.rows[0]) throw new Error("Cuenta no encontrada");
+
+      const history = await client.query<{ payments: string; applied_charges: string }>(
+        `SELECT
+           (SELECT COUNT(*)::text FROM payments WHERE billing_account_id = $1) AS payments,
+           (SELECT COUNT(*)::text FROM billing_charges
+             WHERE account_id = $1
+               AND (status <> 'open' OR outstanding_amount <> original_amount)) AS applied_charges`,
+        [accountId],
+      );
+      if (Number(history.rows[0].payments) > 0 || Number(history.rows[0].applied_charges) > 0) {
+        throw new Error("Esta cuenta tiene historial de pagos y debe conservarse para la contabilidad");
+      }
+      await client.query("DELETE FROM billing_accounts WHERE id = $1", [accountId]);
+    });
+    revalidatePath("/admin/accounts");
+    revalidatePath("/mi-cuenta");
+    return NextResponse.json({ ok: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "No se pudo eliminar la cuenta";
+    const known = message === "Cuenta no encontrada" || message.includes("historial de pagos");
+    return NextResponse.json({ error: known ? message : "No se pudo eliminar la cuenta" }, { status: known ? 409 : 500 });
+  }
+}

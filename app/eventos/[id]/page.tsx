@@ -9,7 +9,7 @@ import EventReservationClient from "./EventReservationClient";
 export const dynamic = "force-dynamic";
 type EventRecord = { id: string; title: string; description: string | null; event_date: Date; location: string | null; seating_mode: "none" | "open" | "assigned"; seat_plan_type: "architectural" | "custom"; capacity: number | null; seat_price: string | number; published: boolean; reservations_open: boolean };
 
-export default async function EventDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ payment?: string; session_id?: string; payment_id?: string }> }) {
+export default async function EventDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ payment?: string; session_id?: string; payment_id?: string; internal_payment_id?: string }> }) {
   const user = await getCurrentUser();
   const { id } = await params;
   const paymentParams = await searchParams;
@@ -30,6 +30,6 @@ export default async function EventDetailPage({ params, searchParams }: { params
       {event.seating_mode === "assigned" ? <p className="mt-3 text-sm font-semibold text-gold-light">{Number(event.seat_price) > 0 ? `$${Number(event.seat_price).toLocaleString("es-MX")} MXN por asiento` : "Evento gratuito"}</p> : null}
       {event.description ? <p className="mt-6 max-w-2xl leading-relaxed text-cream/80">{event.description}</p> : null}
     </div></section>
-    <section className="px-3 py-8 sm:px-6 sm:py-16"><div className="mx-auto max-w-5xl"><EventReservationClient eventId={event.id} mode={event.seating_mode} planType={event.seat_plan_type ?? "architectural"} capacity={event.capacity} seatPrice={Number(event.seat_price ?? 0)} reservationsOpen={event.reservations_open} seats={seatsResult.rows} venueTables={venueLayout} existingReservations={reservationResult.rows} reservedCount={Number(countResult.rows[0]?.count ?? 0)} paymentResult={paymentParams.payment === "success" ? "success" : paymentParams.payment === "cancelled" ? "cancelled" : null} sessionId={paymentParams.session_id || null} cancelledPaymentId={paymentParams.payment_id || null} /></div></section>
+    <section className="px-3 py-8 sm:px-6 sm:py-16"><div className="mx-auto max-w-5xl"><EventReservationClient eventId={event.id} mode={event.seating_mode} planType={event.seat_plan_type ?? "architectural"} capacity={event.capacity} seatPrice={Number(event.seat_price ?? 0)} reservationsOpen={event.reservations_open} seats={seatsResult.rows} venueTables={venueLayout} existingReservations={reservationResult.rows} reservedCount={Number(countResult.rows[0]?.count ?? 0)} paymentResult={paymentParams.payment === "success" ? "success" : paymentParams.payment === "cancelled" ? "cancelled" : null} sessionId={paymentParams.session_id || null} internalPaymentId={paymentParams.internal_payment_id || null} providerPaymentId={paymentParams.internal_payment_id ? paymentParams.payment_id || null : null} cancelledPaymentId={paymentParams.internal_payment_id || paymentParams.payment_id || null} /></div></section>
   </main>;
 }

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
-import { cleanText, money, requireBillingAdmin } from "@/lib/billing";
+import { cleanText, requireBillingAdmin } from "@/lib/billing";
 import { transaction } from "@/lib/db";
 import { sendPaymentReceipt } from "@/lib/transactional-emails";
 
@@ -9,22 +9,26 @@ export async function POST(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const body = await req.json().catch(() => ({}));
   const accountId = cleanText(body.account_id, 80);
-  const amount = money(body.amount);
+  const chargeIds = [...new Set(Array.isArray(body.charge_ids)
+    ? body.charge_ids.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
+    : [])].slice(0, 100);
   const notes = cleanText(body.notes, 500) || null;
-  if (!accountId || !amount) return NextResponse.json({ error: "Cuenta e importe son obligatorios" }, { status: 400 });
+  if (!accountId || !chargeIds.length) return NextResponse.json({ error: "Selecciona la cuenta y al menos un cargo" }, { status: 400 });
 
   try {
     const result = await transaction(async (client) => {
       const charges = await client.query<{ id: string; concept: string; outstanding_amount: string }>(
         `SELECT id, concept, outstanding_amount::text
            FROM billing_charges
-          WHERE account_id = $1 AND status = 'open' AND outstanding_amount > 0
+          WHERE account_id = $1 AND id = ANY($2::uuid[])
+            AND status = 'open' AND outstanding_amount > 0
           ORDER BY due_date NULLS LAST, created_at
           FOR UPDATE`,
-        [accountId],
+        [accountId, chargeIds],
       );
-      const totalOutstanding = charges.rows.reduce((sum, row) => sum + Number(row.outstanding_amount), 0);
-      if (amount > totalOutstanding + 0.001) throw new Error("El pago supera el saldo pendiente");
+      if (charges.rows.length !== chargeIds.length) throw new Error("Uno de los cargos seleccionados ya fue pagado o no pertenece a esta cuenta");
+      const amount = Math.round(charges.rows.reduce((sum, row) => sum + Number(row.outstanding_amount), 0) * 100) / 100;
+      if (amount <= 0) throw new Error("Los cargos seleccionados ya están cubiertos");
 
       const account = await client.query<{ display_name: string; email: string | null }>(
         "SELECT display_name, email FROM billing_accounts WHERE id = $1",
@@ -53,28 +57,23 @@ export async function POST(req: NextRequest) {
          RETURNING id`,
         [accountId, amount, account.rows[0].display_name, account.rows[0].email, notes, admin.user.id],
       );
-      let remaining = amount;
       const appliedConcepts: string[] = [];
       for (const charge of charges.rows) {
-        if (remaining <= 0) break;
-        const allocation = Math.min(remaining, Number(charge.outstanding_amount));
-        if (allocation > 0) appliedConcepts.push(charge.concept);
+        const allocation = Number(charge.outstanding_amount);
+        appliedConcepts.push(charge.concept);
         await client.query(
           `INSERT INTO billing_payment_allocations (payment_id, charge_id, amount) VALUES ($1, $2, $3)`,
           [payment.rows[0].id, charge.id, allocation],
         );
-        const outstanding = Math.round((Number(charge.outstanding_amount) - allocation) * 100) / 100;
         await client.query(
           `UPDATE billing_charges
-              SET outstanding_amount = $2,
-                  status = CASE WHEN $2 = 0 THEN 'paid' ELSE 'open' END,
+              SET outstanding_amount = 0,
+                  status = 'paid',
                   updated_at = NOW()
             WHERE id = $1`,
-          [charge.id, outstanding],
+          [charge.id],
         );
-        remaining = Math.round((remaining - allocation) * 100) / 100;
       }
-      if (remaining !== 0) throw new Error("No se pudo aplicar el importe completo");
       const summary = await client.query<{ open_balance: string; open_charges: string }>(
         `SELECT COALESCE(SUM(outstanding_amount) FILTER (WHERE status = 'open'), 0)::text AS open_balance,
                 COUNT(*) FILTER (WHERE status = 'open')::text AS open_charges

@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { transaction, query } from "@/lib/db";
 import { failPendingPayment } from "@/lib/payment-processing";
 import { clientIp, isRateLimited } from "@/lib/rate-limit";
+import { createMercadoPagoPreference, mercadoPagoConfigured } from "@/lib/mercado-pago";
 import { publicSiteUrl, stripeClient, stripeConfigured } from "@/lib/stripe";
 import { sendReservationConfirmation } from "@/lib/transactional-emails";
 
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   if (!user || user.status !== "approved") return NextResponse.json({ error: "Necesitas una cuenta aprobada" }, { status: 401 });
   const { id: eventId } = await context.params;
   const body = await req.json().catch(() => ({}));
+  const useMercadoPago = mercadoPagoConfigured();
   let pendingPaymentId: string | null = null;
 
   try {
@@ -24,7 +26,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (event.seating_mode === "none") throw new Error("NO_RESERVATIONS");
       if (!event.published || !event.reservations_open) throw new Error("RESERVATIONS_CLOSED");
       const unitPrice = Number(event.seat_price ?? 0);
-      if (unitPrice > 0 && !stripeConfigured()) throw new Error("PAYMENTS_UNAVAILABLE");
+      if (unitPrice > 0 && !useMercadoPago && !stripeConfigured()) throw new Error("PAYMENTS_UNAVAILABLE");
 
       const stale = await client.query<{ payment_id: string | null; seat_id: string | null }>(
         `SELECT payment_id, seat_id FROM event_reservations
@@ -73,10 +75,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
           `INSERT INTO payments
             (user_id, amount, currency, status, payment_method, donor_name, donor_email,
              description, metadata, expires_at)
-           VALUES ($1, $2, 'MXN', 'pending', 'stripe', $3, $4, $5,
+           VALUES ($1, $2, 'MXN', 'pending', $7, $3, $4, $5,
                    jsonb_build_object('kind', 'event', 'event_id', $6::text), NOW() + INTERVAL '30 minutes')
            RETURNING id`,
-          [user.id, total, user.full_name || user.email, user.email, `${quantity} ${quantity === 1 ? "lugar" : "lugares"} · ${event.title}`, eventId],
+          [user.id, total, user.full_name || user.email, user.email, `${quantity} ${quantity === 1 ? "lugar" : "lugares"} · ${event.title}`, eventId, useMercadoPago ? "mercadopago" : "stripe"],
         );
         paymentId = payment.rows[0].id;
         pendingPaymentId = paymentId;
@@ -107,6 +109,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     });
 
     if (result.paymentId) {
+      if (useMercadoPago) {
+        const preference = await createMercadoPagoPreference({ paymentId: result.paymentId, title: result.event.title, description: result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre", amount: result.total, email: user.email, kind: "event", returnPath: `/eventos/${eventId}` });
+        await query("UPDATE payments SET mercadopago_preference_id = $2, updated_at = NOW() WHERE id = $1", [result.paymentId, preference.id]);
+        return NextResponse.json({ ok: true, requiresPayment: true, url: preference.url, provider: "mercadopago" });
+      }
       const commonMetadata = { payment_id: result.paymentId, payment_kind: "event", event_id: eventId, user_id: user.id };
       const session = await stripeClient().checkout.sessions.create({
         mode: "payment",
@@ -120,7 +127,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       }, { idempotencyKey: result.paymentId });
       if (!session.url) throw new Error("CHECKOUT_FAILED");
       await query("UPDATE payments SET stripe_session_id = $2, updated_at = NOW() WHERE id = $1", [result.paymentId, session.id]);
-      return NextResponse.json({ ok: true, requiresPayment: true, url: session.url });
+      return NextResponse.json({ ok: true, requiresPayment: true, url: session.url, provider: "stripe" });
     }
 
     await sendReservationConfirmation({ email: user.email, memberName: user.full_name || user.email, eventId, eventTitle: result.event.title, eventDate: result.event.event_date, location: result.event.location || "Midrash Natán Torá", seats: result.labels, quantity: result.quantity, total: 0 }).catch((error) => console.error("[events/reserve] confirmation email failed:", error));
@@ -133,7 +140,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       RESERVATIONS_CLOSED: ["Las reservaciones todavía no están abiertas", 409],
       ALREADY_RESERVED: ["Ya tienes una reservación o un pago en proceso para este evento", 409], SOLD_OUT: ["Ya no hay lugares disponibles", 409],
       SEAT_REQUIRED: ["Selecciona al menos un asiento", 400], SEAT_UNAVAILABLE: ["Uno de esos asientos acaba de ser ocupado. Revisa tu selección.", 409],
-      PAYMENTS_UNAVAILABLE: ["El pago de este evento no está disponible por el momento.", 503], CHECKOUT_FAILED: ["No fue posible abrir el pago seguro de Stripe.", 500],
+      PAYMENTS_UNAVAILABLE: ["El pago de este evento no está disponible por el momento.", 503], CHECKOUT_FAILED: ["No fue posible abrir el pago seguro.", 500],
     };
     const [text, status] = responses[message] ?? ["No fue posible completar la reservación", 500];
     console.error("[events/reserve]", error);

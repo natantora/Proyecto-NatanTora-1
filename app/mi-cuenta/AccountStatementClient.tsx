@@ -8,11 +8,13 @@ type Payment = { id: string; amount: number; status: string; payment_method: str
 
 const mxn = (value: number) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
 
-export default function AccountStatementClient({ account, charges, payments, paymentResult, sessionId, cardPaymentsEnabled }: {
+export default function AccountStatementClient({ account, charges, payments, paymentResult, sessionId, internalPaymentId, providerPaymentId, cardPaymentsEnabled }: {
   account: { id: string; display_name: string; email: string | null; external_reference: string | null };
   charges: Charge[]; payments: Payment[];
   paymentResult: "success" | "cancelled" | null;
   sessionId: string | null;
+  internalPaymentId: string | null;
+  providerPaymentId: string | null;
   cardPaymentsEnabled: boolean;
 }) {
   const router = useRouter();
@@ -23,11 +25,15 @@ export default function AccountStatementClient({ account, charges, payments, pay
   const selectedTotal = useMemo(() => charges.filter((charge) => selected.has(charge.id)).reduce((sum, charge) => sum + charge.outstanding_amount, 0), [charges, selected]);
 
   useEffect(() => {
-    if (paymentResult !== "success" || !sessionId) return;
+    if (paymentResult !== "success" || (!sessionId && !internalPaymentId)) return;
     let attempts = 0;
     const check = async () => {
       attempts += 1;
-      const response = await fetch(`/api/payments/status?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+      const params = new URLSearchParams();
+      if (sessionId) params.set("session_id", sessionId);
+      if (internalPaymentId) params.set("internal_payment_id", internalPaymentId);
+      if (providerPaymentId) params.set("provider_payment_id", providerPaymentId);
+      const response = await fetch(`/api/payments/status?${params}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (payload.status === "paid") {
         router.replace("/mi-cuenta");
@@ -35,7 +41,7 @@ export default function AccountStatementClient({ account, charges, payments, pay
       } else if (attempts < 7) window.setTimeout(check, 1200);
     };
     void check();
-  }, [paymentResult, router, sessionId]);
+  }, [internalPaymentId, paymentResult, providerPaymentId, router, sessionId]);
 
   function toggle(id: string) {
     setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -59,7 +65,7 @@ export default function AccountStatementClient({ account, charges, payments, pay
           <div className="border border-line bg-cream-light px-6 py-4 text-right"><div className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-muted">Saldo pendiente</div><div className="serif-display text-[32px] text-navy">{mxn(total)}</div></div>
         </div>
 
-        {paymentResult === "success" && <div className="border border-green-200 bg-green-50 px-4 py-3 text-[13px] text-green-800">Pago recibido. Tu saldo se actualizará en cuanto Stripe confirme la operación.</div>}
+        {paymentResult === "success" && <div className="border border-green-200 bg-green-50 px-4 py-3 text-[13px] text-green-800">Pago recibido. Tu saldo se actualizará en cuanto el proveedor confirme la operación.</div>}
         {paymentResult === "cancelled" && <div className="border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">El pago fue cancelado y no se hizo ningún cargo.</div>}
         {error && <div className="border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">{error}</div>}
 
@@ -69,7 +75,7 @@ export default function AccountStatementClient({ account, charges, payments, pay
           {charges.length > 0 && <div className="flex flex-col gap-4 bg-navy p-5 text-cream sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><div className="text-[10px] font-bold uppercase tracking-[0.18em] text-cream/60">Total seleccionado</div><div className="serif-display text-[28px]">{mxn(selectedTotal)}</div>{!cardPaymentsEnabled && <p className="mt-1 text-[11px] text-cream/70">El pago con tarjeta no está disponible por el momento.</p>}</div><button type="button" disabled={!cardPaymentsEnabled || busy || selectedTotal <= 0} onClick={checkout} className="bg-gold px-6 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-navy-deep hover:bg-gold-light disabled:cursor-not-allowed disabled:opacity-50">{!cardPaymentsEnabled ? "Pago no disponible" : busy ? "Preparando pago..." : "Pagar con tarjeta"}</button></div>}
         </section>
 
-        <section><h2 className="serif-display text-[30px] text-navy">Historial de pagos</h2><div className="mt-3 overflow-x-auto border border-line bg-white"><table className="min-w-[600px] w-full text-left text-[12px]"><thead className="bg-cream-light"><tr><th className="p-3">Fecha</th><th className="p-3">Descripción</th><th className="p-3">Método</th><th className="p-3 text-right">Importe</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id} className="border-t border-line-soft"><td className="p-3">{new Date(payment.paid_at || payment.created_at).toLocaleDateString("es-MX")}</td><td className="p-3">{payment.description || "Pago de estado de cuenta"}</td><td className="p-3">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "stripe" ? "Tarjeta" : payment.payment_method || "—"}</td><td className="p-3 text-right font-semibold">{mxn(payment.amount)}</td></tr>)}{payments.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-ink-muted">Todavía no hay pagos registrados.</td></tr>}</tbody></table></div></section>
+        <section><h2 className="serif-display text-[30px] text-navy">Historial de pagos</h2><div className="mt-3 overflow-x-auto border border-line bg-white"><table className="min-w-[600px] w-full text-left text-[12px]"><thead className="bg-cream-light"><tr><th className="p-3">Fecha</th><th className="p-3">Descripción</th><th className="p-3">Método</th><th className="p-3 text-right">Importe</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id} className="border-t border-line-soft"><td className="p-3">{new Date(payment.paid_at || payment.created_at).toLocaleDateString("es-MX")}</td><td className="p-3">{payment.description || "Pago de estado de cuenta"}</td><td className="p-3">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "mercadopago" ? "Mercado Pago" : payment.payment_method === "stripe" ? "Tarjeta" : payment.payment_method || "—"}</td><td className="p-3 text-right font-semibold">{mxn(payment.amount)}</td></tr>)}{payments.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-ink-muted">Todavía no hay pagos registrados.</td></tr>}</tbody></table></div></section>
       </div>
     </div>
   );

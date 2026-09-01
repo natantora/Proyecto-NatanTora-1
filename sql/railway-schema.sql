@@ -437,6 +437,8 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS billing_applied_at TIMESTAMPTZ;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_invoice_id TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS mercadopago_preference_id TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS mercadopago_payment_id TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_stripe_session
   ON payments(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
@@ -444,6 +446,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_stripe_invoice
   ON payments(stripe_invoice_id) WHERE stripe_invoice_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_payments_stripe_subscription
   ON payments(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_mercadopago_preference
+  ON payments(mercadopago_preference_id) WHERE mercadopago_preference_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_mercadopago_payment
+  ON payments(mercadopago_payment_id) WHERE mercadopago_payment_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_payments_billing_account
   ON payments(billing_account_id, created_at DESC);
 

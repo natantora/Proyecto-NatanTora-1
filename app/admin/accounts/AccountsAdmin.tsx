@@ -28,6 +28,10 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
   const [query, setQuery] = useState("");
   const [accountRows, setAccountRows] = useState(accounts);
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
+  const [cashAccountId, setCashAccountId] = useState("");
+  const [cashChargeIds, setCashChargeIds] = useState<string[]>([]);
+  // The server refresh returns the authoritative balances after every mutation.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setAccountRows(accounts), [accounts]);
   const totalBalance = accountRows.reduce((sum, account) => sum + account.open_balance, 0);
   const unlinked = accountRows.filter((account) => !account.profile_id).length;
@@ -71,13 +75,14 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
   async function recordCash(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const data = Object.fromEntries(new FormData(form));
+    const data = { account_id: cashAccountId, charge_ids: cashChargeIds, notes: String(new FormData(form).get("notes") || "") };
     try {
       const result = await api("/api/admin/billing/cash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
       setAccountRows((current) => current.map((account) => account.id === result.payment.account_id
         ? { ...account, open_balance: result.payment.open_balance, open_charges: result.payment.open_charges, total_paid: account.total_paid + result.payment.amount }
         : account));
-      setMessage("Pago en efectivo registrado y aplicado al saldo"); form.reset(); router.refresh();
+      setMessage("Pago en efectivo registrado en los cargos seleccionados");
+      setCashAccountId(""); setCashChargeIds([]); form.reset(); router.refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
   }
 
@@ -85,6 +90,17 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
     try {
       await api("/api/admin/billing/accounts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: accountId, profile_id: profileId }) });
       setMessage(profileId ? "Cuenta vinculada" : "Vinculación eliminada"); router.refresh();
+    } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
+  }
+
+  async function deleteAccount(account: BillingAccountRow) {
+    if (!window.confirm(`¿Eliminar definitivamente la cuenta de ${account.display_name}?\n\nSolo se eliminará si no tiene historial de pagos.`)) return;
+    try {
+      await api("/api/admin/billing/accounts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: account.id }) });
+      setAccountRows((current) => current.filter((item) => item.id !== account.id));
+      setMessage("Cuenta eliminada correctamente");
+      if (expandedAccountId === account.id) setExpandedAccountId(null);
+      router.refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
   }
 
@@ -118,7 +134,7 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Metric label="Saldo pendiente" value={mxn(totalBalance)} />
-        <Metric label="Cuentas activas" value={String(accounts.length)} />
+        <Metric label="Cuentas activas" value={String(accountRows.length)} />
         <Metric label="Sin vincular" value={String(unlinked)} warn={unlinked > 0} />
       </div>
 
@@ -165,11 +181,14 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
           <button disabled={busy || accounts.length === 0} className={buttonClass}>Agregar cargo</button>
         </ActionForm>
         <ActionForm title="Registrar pago en efectivo" onSubmit={recordCash}>
-          <AccountSelect accounts={accountRows.filter((account) => account.open_balance > 0)} />
-          <input className={inputClass} name="amount" type="number" min="0.01" step="0.01" placeholder="Importe recibido" required />
+          <select className={inputClass} name="account_id" required value={cashAccountId} onChange={(event) => { setCashAccountId(event.target.value); setCashChargeIds([]); }}>
+            <option value="" disabled>Selecciona una cuenta</option>
+            {accountRows.filter((account) => account.open_balance > 0).map((account) => <option key={account.id} value={account.id}>{account.display_name} · {mxn(account.open_balance)}</option>)}
+          </select>
+          {cashAccountId && <CashChargeSelector account={accountRows.find((account) => account.id === cashAccountId) || null} selected={cashChargeIds} onChange={setCashChargeIds} />}
           <textarea className={inputClass} name="notes" placeholder="Recibo, fecha o comentarios" rows={3} />
-          <p className="text-[11px] leading-relaxed text-ink-muted">El pago se aplica primero a los cargos más antiguos.</p>
-          <button disabled={busy || totalBalance <= 0} className={buttonClass}>Registrar efectivo</button>
+          <p className="text-[11px] leading-relaxed text-ink-muted">El importe se calcula con los cargos marcados y se liquidan exactamente esos conceptos.</p>
+          <button disabled={busy || cashChargeIds.length === 0} className={buttonClass}>Registrar efectivo</button>
         </ActionForm>
       </div>
 
@@ -180,7 +199,7 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
             <thead className="bg-navy text-cream"><tr><th className="p-3">Cuenta</th><th className="p-3">Contacto</th><th className="p-3 text-right">Saldo pendiente</th><th className="p-3 text-right">Pagado</th><th className="p-3">Vinculación</th><th className="p-3 text-center">Detalle</th></tr></thead>
             <tbody>{filtered.map((account) => {
               const expanded = expandedAccountId === account.id;
-              return <AccountTableRows key={account.id} account={account} expanded={expanded} busy={busy} profiles={profiles} onToggle={() => setExpandedAccountId(expanded ? null : account.id)} onLink={linkProfile} />;
+              return <AccountTableRows key={account.id} account={account} expanded={expanded} busy={busy} profiles={profiles} onToggle={() => setExpandedAccountId(expanded ? null : account.id)} onLink={linkProfile} onDelete={() => deleteAccount(account)} />;
             })}</tbody>
           </table>
           {filtered.length === 0 && <p className="p-6 text-center text-[13px] text-ink-muted">No hay cuentas que coincidan.</p>}
@@ -196,13 +215,27 @@ function Metric({ label, value, warn }: { label: string; value: string; warn?: b
 function ActionForm({ title, onSubmit, children }: { title: string; onSubmit: (event: FormEvent<HTMLFormElement>) => void; children: React.ReactNode }) { return <form onSubmit={onSubmit} className="space-y-3 border border-line bg-cream-light p-5"><h2 className="serif-display text-[24px] text-navy">{title}</h2>{children}</form>; }
 function AccountSelect({ accounts }: { accounts: BillingAccountRow[] }) { return <select className={inputClass} name="account_id" required defaultValue=""><option value="" disabled>Selecciona una cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.display_name} · {mxn(account.open_balance)}</option>)}</select>; }
 
-function AccountTableRows({ account, expanded, busy, profiles, onToggle, onLink }: {
+function CashChargeSelector({ account, selected, onChange }: { account: BillingAccountRow | null; selected: string[]; onChange: (ids: string[]) => void }) {
+  const charges = account?.charges.filter((charge) => charge.status === "open" && charge.outstanding_amount > 0) || [];
+  const total = charges.filter((charge) => selected.includes(charge.id)).reduce((sum, charge) => sum + charge.outstanding_amount, 0);
+  return <div className="border border-line bg-white">
+    <div className="flex items-center justify-between border-b border-line px-3 py-2"><strong className="text-[11px] uppercase tracking-[0.12em] text-navy">Cargos a pagar</strong><span className="font-semibold text-navy">{mxn(total)}</span></div>
+    <div className="max-h-48 overflow-y-auto">{charges.map((charge) => <label key={charge.id} className="flex cursor-pointer items-start gap-3 border-b border-line-soft px-3 py-2.5 last:border-0">
+      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-gold" checked={selected.includes(charge.id)} onChange={(event) => onChange(event.target.checked ? [...selected, charge.id] : selected.filter((id) => id !== charge.id))} />
+      <span className="min-w-0 flex-1 text-[12px]"><strong className="block truncate text-navy">{charge.concept}</strong><span className="text-ink-muted">{charge.period || "Sin periodo"}</span></span>
+      <strong className="text-[12px] text-navy">{mxn(charge.outstanding_amount)}</strong>
+    </label>)}{charges.length === 0 && <p className="p-3 text-[11px] text-ink-muted">Esta cuenta no tiene cargos pendientes.</p>}</div>
+  </div>;
+}
+
+function AccountTableRows({ account, expanded, busy, profiles, onToggle, onLink, onDelete }: {
   account: BillingAccountRow;
   expanded: boolean;
   busy: boolean;
   profiles: ProfileOption[];
   onToggle: () => void;
   onLink: (accountId: string, profileId: string) => void;
+  onDelete: () => void;
 }) {
   return <>
     <tr className="border-t border-line-soft align-top hover:bg-cream-light/60">
@@ -211,7 +244,7 @@ function AccountTableRows({ account, expanded, busy, profiles, onToggle, onLink 
       <td className="p-3 text-right"><strong className={account.open_balance > 0 ? "text-navy" : "text-green-700"}>{mxn(account.open_balance)}</strong><div className="text-[10px] text-ink-muted">{account.open_balance > 0 ? "Por cobrar" : "Al corriente"}</div></td>
       <td className="p-3 text-right font-semibold text-green-700">{mxn(account.total_paid)}</td>
       <td className="p-3"><select className={inputClass} value={account.profile_id || ""} onChange={(event) => onLink(account.id, event.target.value)} disabled={busy}><option value="">Sin usuario vinculado</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name} · {profile.email}</option>)}</select></td>
-      <td className="p-3 text-center"><button type="button" onClick={onToggle} className="border border-gold px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-navy hover:bg-gold hover:text-navy-deep">{expanded ? "Cerrar" : "Ver movimientos"}</button></td>
+      <td className="p-3 text-center"><div className="flex justify-center gap-2"><button type="button" onClick={onToggle} className="border border-gold px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-navy hover:bg-gold hover:text-navy-deep">{expanded ? "Cerrar" : "Ver movimientos"}</button><button type="button" onClick={onDelete} disabled={busy} className="border border-red-200 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-red-700 hover:bg-red-50 disabled:opacity-50">Eliminar</button></div></td>
     </tr>
     {expanded && <tr className="border-t border-line bg-cream-light"><td colSpan={6} className="p-4 sm:p-6">
       <div className="grid gap-5 xl:grid-cols-2">
@@ -224,7 +257,7 @@ function AccountTableRows({ account, expanded, busy, profiles, onToggle, onLink 
         </div>
         <div>
           <div className="mb-2 flex items-center justify-between"><h3 className="serif-display text-[23px] text-navy">Pagos</h3><span className="text-[11px] text-ink-muted">{account.payments.length} movimientos</span></div>
-          <div className="overflow-x-auto border border-line bg-white"><table className="min-w-[560px] w-full"><thead className="bg-white text-[10px] uppercase tracking-[0.12em] text-ink-muted"><tr><th className="p-3 text-left">Fecha</th><th className="p-3 text-left">Método / aplicación</th><th className="p-3 text-right">Importe</th><th className="p-3 text-left">Estado</th></tr></thead><tbody>{account.payments.map((payment) => <tr key={payment.id} className="border-t border-line-soft"><td className="p-3">{new Date(payment.paid_at || payment.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</td><td className="p-3"><strong className="text-navy">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "stripe" ? "Tarjeta" : payment.payment_method || "Otro"}</strong><div className="text-[10px] text-ink-muted">{payment.applied_to || payment.description || "Pago de estado de cuenta"}</div>{payment.notes && <div className="mt-1 text-[10px] text-ink-soft">{payment.notes}</div>}</td><td className="p-3 text-right font-semibold text-green-700">{mxn(payment.amount)}</td><td className="p-3"><StatusPill status={payment.status} /></td></tr>)}{account.payments.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-ink-muted">Todavía no hay pagos registrados.</td></tr>}</tbody></table></div>
+          <div className="overflow-x-auto border border-line bg-white"><table className="min-w-[560px] w-full"><thead className="bg-white text-[10px] uppercase tracking-[0.12em] text-ink-muted"><tr><th className="p-3 text-left">Fecha</th><th className="p-3 text-left">Método / aplicación</th><th className="p-3 text-right">Importe</th><th className="p-3 text-left">Estado</th></tr></thead><tbody>{account.payments.map((payment) => <tr key={payment.id} className="border-t border-line-soft"><td className="p-3">{new Date(payment.paid_at || payment.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</td><td className="p-3"><strong className="text-navy">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "mercadopago" ? "Mercado Pago" : payment.payment_method === "stripe" ? "Tarjeta" : payment.payment_method || "Otro"}</strong><div className="text-[10px] text-ink-muted">{payment.applied_to || payment.description || "Pago de estado de cuenta"}</div>{payment.notes && <div className="mt-1 text-[10px] text-ink-soft">{payment.notes}</div>}</td><td className="p-3 text-right font-semibold text-green-700">{mxn(payment.amount)}</td><td className="p-3"><StatusPill status={payment.status} /></td></tr>)}{account.payments.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-ink-muted">Todavía no hay pagos registrados.</td></tr>}</tbody></table></div>
         </div>
       </div>
     </td></tr>}

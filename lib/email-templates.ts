@@ -182,7 +182,7 @@ type ReservationEmailParams = {
 type PaymentReceiptEmailParams = {
   memberName: string;
   amount: number;
-  method: "cash" | "stripe";
+  method: "cash" | "stripe" | "mercadopago";
   concepts: string[];
   remainingBalance: number;
   accountUrl: string;
@@ -291,7 +291,7 @@ export function paymentReceiptEmail(p: PaymentReceiptEmailParams): string {
     body: `Hola, ${escapeHtml(p.memberName)}. Registramos correctamente tu pago en el estado de cuenta.`,
     details: [
       ["Importe pagado", formatMoney(p.amount)],
-      ["Método", p.method === "cash" ? "Efectivo" : "Tarjeta"],
+      ["Método", p.method === "cash" ? "Efectivo" : p.method === "mercadopago" ? "Mercado Pago" : "Tarjeta"],
       ["Fecha", formatEventDate(p.paidAt ?? new Date())],
       ["Aplicado a", p.concepts.length ? p.concepts.join(", ") : "Estado de cuenta"],
       ["Saldo pendiente", formatMoney(p.remainingBalance)],

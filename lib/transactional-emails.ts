@@ -60,7 +60,7 @@ export async function sendPaymentReceipt(params: {
   email: string;
   memberName: string;
   amount: number;
-  method: "cash" | "stripe";
+  method: "cash" | "stripe" | "mercadopago";
   concepts: string[];
   remainingBalance: number;
   paidAt?: Date | string;

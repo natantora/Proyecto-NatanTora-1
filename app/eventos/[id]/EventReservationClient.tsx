@@ -9,10 +9,10 @@ import InteractiveSeatPlan, { type SeatPlanType } from "@/components/Interactive
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
 type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null };
 
-export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, reservedCount, paymentResult, sessionId, cancelledPaymentId }: {
+export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, reservedCount, paymentResult, sessionId, internalPaymentId, providerPaymentId, cancelledPaymentId }: {
   eventId: string; mode: "none" | "open" | "assigned"; planType: SeatPlanType; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
   seatPrice: number; reservationsOpen: boolean; existingReservations: Reservation[]; reservedCount: number;
-  paymentResult: "success" | "cancelled" | null; sessionId: string | null; cancelledPaymentId: string | null;
+  paymentResult: "success" | "cancelled" | null; sessionId: string | null; internalPaymentId: string | null; providerPaymentId: string | null; cancelledPaymentId: string | null;
 }) {
   const router = useRouter();
   const [seats, setSeats] = useState(initialSeats);
@@ -34,17 +34,21 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
         .finally(() => { router.replace(`/eventos/${eventId}`); router.refresh(); });
       return;
     }
-    if (paymentResult !== "success" || !sessionId) return;
+    if (paymentResult !== "success" || (!sessionId && !internalPaymentId)) return;
     let attempts = 0;
     const check = async () => {
       attempts += 1;
-      const response = await fetch(`/api/payments/status?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+      const params = new URLSearchParams();
+      if (sessionId) params.set("session_id", sessionId);
+      if (internalPaymentId) params.set("internal_payment_id", internalPaymentId);
+      if (providerPaymentId) params.set("provider_payment_id", providerPaymentId);
+      const response = await fetch(`/api/payments/status?${params}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (payload.status === "paid") { router.replace(`/eventos/${eventId}`); router.refresh(); }
       else if (attempts < 7) window.setTimeout(check, 1200);
     };
     void check();
-  }, [cancelledPaymentId, eventId, paymentResult, router, sessionId]);
+  }, [cancelledPaymentId, eventId, internalPaymentId, paymentResult, providerPaymentId, router, sessionId]);
 
   async function reserve() {
     setLoading(true); setError("");

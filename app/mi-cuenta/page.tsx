@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { query } from "@/lib/db";
 import AccountStatementClient from "./AccountStatementClient";
+import { mercadoPagoConfigured } from "@/lib/mercado-pago";
 import { stripeConfigured } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
@@ -9,9 +10,9 @@ export const dynamic = "force-dynamic";
 export default async function MyAccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ payment?: string; session_id?: string }>;
+  searchParams: Promise<{ payment?: string; session_id?: string; internal_payment_id?: string; payment_id?: string }>;
 }) {
-  const { payment, session_id } = await searchParams;
+  const { payment, session_id, internal_payment_id, payment_id } = await searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/auth/login?next=/mi-cuenta");
   if (user.status !== "approved") redirect("/auth/pendiente");
@@ -70,7 +71,9 @@ export default async function MyAccountPage({
       payments={paymentsResult.rows.map((row) => ({ ...row, amount: Number(row.amount) }))}
       paymentResult={payment === "success" ? "success" : payment === "cancelled" ? "cancelled" : null}
       sessionId={session_id || null}
-      cardPaymentsEnabled={stripeConfigured()}
+      internalPaymentId={internal_payment_id || null}
+      providerPaymentId={payment_id || null}
+      cardPaymentsEnabled={mercadoPagoConfigured() || stripeConfigured()}
     />
   );
 }
