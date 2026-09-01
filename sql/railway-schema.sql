@@ -486,6 +486,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_mercadopago_payment
   ON payments(mercadopago_payment_id) WHERE mercadopago_payment_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_payments_billing_account
   ON payments(billing_account_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payments_pending_expiry
+  ON payments(expires_at) WHERE status = 'pending' AND expires_at IS NOT NULL;
 
 -- Las reservaciones gratuitas se confirman al instante. Las reservaciones con
 -- precio se mantienen temporalmente mientras Stripe procesa el pago y solo se
@@ -508,6 +510,29 @@ ALTER TABLE event_reservations DROP CONSTRAINT IF EXISTS event_reservations_even
 CREATE UNIQUE INDEX IF NOT EXISTS idx_event_reservations_active_seat
   ON event_reservations(event_id, seat_id)
   WHERE seat_id IS NOT NULL AND status IN ('pending', 'confirmed');
+
+-- Limpia intentos históricos antes de iniciar el trabajador automático. Esto
+-- evita enviar avisos tardíos por pruebas antiguas al activar esta función.
+UPDATE event_seats seat
+   SET status = 'available'
+  FROM event_reservations reservation
+  JOIN payments payment ON payment.id = reservation.payment_id
+ WHERE reservation.seat_id = seat.id
+   AND reservation.status = 'pending'
+   AND payment.status = 'pending'
+   AND COALESCE(reservation.expires_at, payment.expires_at) <= NOW();
+UPDATE event_reservations reservation
+   SET status = 'expired'
+  FROM payments payment
+ WHERE payment.id = reservation.payment_id
+   AND reservation.status = 'pending'
+   AND payment.status = 'pending'
+   AND COALESCE(reservation.expires_at, payment.expires_at) <= NOW();
+UPDATE payments
+   SET status = 'failed', updated_at = NOW()
+ WHERE status = 'pending'
+   AND expires_at IS NOT NULL
+   AND expires_at <= NOW();
 
 CREATE TABLE IF NOT EXISTS billing_payment_allocations (
   payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
