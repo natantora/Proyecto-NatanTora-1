@@ -143,6 +143,15 @@ try {
         renumberSeatsByVisualOrder(seats),
       );
       if (numberedEventSeats.length) {
+        // Usa etiquetas temporales únicas para que intercambiar dos números
+        // no choque con la restricción única durante la misma actualización.
+        await client.query(
+          `UPDATE event_seats seat
+              SET row_label = '__renumber__' || seat.id::text,
+                  seat_number = -1
+             WHERE seat.id = ANY($1::uuid[])`,
+          [numberedEventSeats.map((seat) => seat.id)],
+        );
         await client.query(
           `UPDATE event_seats seat
               SET row_label = numbered.label,
