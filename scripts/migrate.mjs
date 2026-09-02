@@ -65,7 +65,7 @@ try {
                  WHERE reservation.seat_id = seat.id
                    AND reservation.status IN ('pending', 'confirmed')
               ) THEN 'occupied' ELSE seat.status END
-        USING events event
+         FROM events event
         WHERE seat.event_id = event.id
           AND event.seating_mode = 'assigned'
           AND event.seat_plan_type = 'architectural'
