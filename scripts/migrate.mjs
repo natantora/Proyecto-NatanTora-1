@@ -97,10 +97,10 @@ try {
           AND event.seat_plan_type = 'architectural'`,
     );
 
-    // Ordena una sola vez las etiquetas del plano personalizado sin mover
-    // sillas ni tocar los asientos ya clonados en eventos existentes.
+    // Ordena una sola vez las etiquetas del plano personalizado de derecha a
+    // izquierda sin mover sillas ni tocar los asientos clonados en eventos.
     const numberingMigration = await client.query(
-      "SELECT 1 FROM app_migrations WHERE key = '2026-09-order-custom-seat-labels'",
+      "SELECT 1 FROM app_migrations WHERE key = '2026-09-order-custom-seat-labels-right-to-left'",
     );
     if (!numberingMigration.rowCount) {
       const currentSeats = await client.query(
@@ -116,7 +116,7 @@ try {
           [numberedSeats.map((seat) => seat.id), numberedSeats.map((seat) => seat.label)],
         );
         await client.query(
-          "INSERT INTO app_migrations (key) VALUES ('2026-09-order-custom-seat-labels')",
+          "INSERT INTO app_migrations (key) VALUES ('2026-09-order-custom-seat-labels-right-to-left')",
         );
       }
     }
@@ -124,7 +124,7 @@ try {
     // Conserva los IDs y las reservaciones de eventos personalizados ya
     // creados; únicamente sincroniza su numeración con el orden visual.
     const eventNumberingMigration = await client.query(
-      "SELECT 1 FROM app_migrations WHERE key = '2026-09-order-existing-custom-event-seat-labels'",
+      "SELECT 1 FROM app_migrations WHERE key = '2026-09-order-existing-custom-event-seat-labels-right-to-left'",
     );
     if (!eventNumberingMigration.rowCount) {
       const eventSeats = await client.query(
@@ -153,7 +153,7 @@ try {
         );
       }
       await client.query(
-        "INSERT INTO app_migrations (key) VALUES ('2026-09-order-existing-custom-event-seat-labels')",
+        "INSERT INTO app_migrations (key) VALUES ('2026-09-order-existing-custom-event-seat-labels-right-to-left')",
       );
     }
     await client.query("COMMIT");

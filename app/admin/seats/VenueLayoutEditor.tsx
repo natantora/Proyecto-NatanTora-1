@@ -231,7 +231,7 @@ export default function VenueLayoutEditor({ initialTables, initialSeats }: { ini
           onClick={renumberSeats}
           disabled={seats.length === 0}
           className="inline-flex items-center gap-2 rounded-lg border border-midrash-200 px-3 py-2 text-xs font-semibold text-midrash-700 hover:bg-midrash-50 disabled:cursor-not-allowed disabled:opacity-50"
-          title="Numera por filas, de arriba hacia abajo y de izquierda a derecha"
+          title="Numera por columnas, desde la derecha hacia la izquierda"
         >
           <ListOrdered className="h-4 w-4" /> Ordenar números
         </button>
