@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Armchair, Check, Loader2, Minus, MousePointer2, RectangleHorizontal, Circle, RotateCw, Trash2, Image as ImageIcon } from "lucide-react";
+import { Armchair, Check, Loader2, Minus, MousePointer2, RectangleHorizontal, Circle, RotateCw, Trash2, Image as ImageIcon, ListOrdered } from "lucide-react";
 import type { VenueSeat, VenueTable } from "@/lib/venue-layout";
 import { CANVAS_W, CANVAS_H, NEIGHBOR_SNAP, snapToGrid } from "@/lib/venue-canvas";
+import { nextNumericSeatLabel, renumberSeatsByVisualOrder } from "@/lib/seat-numbering";
 
 type Tool = "select" | "chair" | "rect" | "round" | "wall";
 type Selection = { type: "table"; id: string } | { type: "seat"; id: string } | null;
@@ -82,7 +83,7 @@ export default function VenueLayoutEditor({ initialTables, initialSeats }: { ini
     const raw = pointFromEvent(e);
     const { x, y } = snapPoint(raw.x, raw.y);
     if (tool === "chair") {
-      setSeats((prev) => [...prev, { id: localId("seat"), x, y, rotation: 0, label: String(prev.length + 1) }]);
+      setSeats((prev) => [...prev, { id: localId("seat"), x, y, rotation: 0, label: nextNumericSeatLabel(prev) }]);
     } else if (tool === "rect") {
       setTables((prev) => [...prev, { id: localId("table"), kind: "rect", x, y, width: 90, height: 40, rotation: 0, label: null }]);
     } else if (tool === "round") {
@@ -159,6 +160,12 @@ export default function VenueLayoutEditor({ initialTables, initialSeats }: { ini
     setSelection(null);
   }
 
+  function renumberSeats() {
+    setSeats((prev) => renumberSeatsByVisualOrder(prev));
+    setSelection(null);
+    setSaved(false);
+  }
+
   async function save() {
     setSaving(true);
     try {
@@ -219,6 +226,15 @@ export default function VenueLayoutEditor({ initialTables, initialSeats }: { ini
             <input type="range" min={0.1} max={1} step={0.05} value={bgOpacity} onChange={(e) => setBgOpacity(Number(e.target.value))} />
           </label>
         ) : null}
+        <button
+          type="button"
+          onClick={renumberSeats}
+          disabled={seats.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg border border-midrash-200 px-3 py-2 text-xs font-semibold text-midrash-700 hover:bg-midrash-50 disabled:cursor-not-allowed disabled:opacity-50"
+          title="Numera por filas, de arriba hacia abajo y de izquierda a derecha"
+        >
+          <ListOrdered className="h-4 w-4" /> Ordenar números
+        </button>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-midrash-600">{seats.length} sillas · {furnitureCount} mesas · {wallCount} paredes</span>
           <button type="button" onClick={save} disabled={saving} className="btn-primary">

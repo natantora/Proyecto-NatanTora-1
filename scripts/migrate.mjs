@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import pg from "pg";
 import { ARCHITECTURAL_SEATS } from "../lib/architectural-seat-map.js";
+import { renumberSeatsByVisualOrder } from "../lib/seat-numbering.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL no esta configurada");
@@ -95,6 +96,30 @@ try {
           AND event.seating_mode = 'assigned'
           AND event.seat_plan_type = 'architectural'`,
     );
+
+    // Ordena una sola vez las etiquetas del plano personalizado sin mover
+    // sillas ni tocar los asientos ya clonados en eventos existentes.
+    const numberingMigration = await client.query(
+      "SELECT 1 FROM app_migrations WHERE key = '2026-09-order-custom-seat-labels'",
+    );
+    if (!numberingMigration.rowCount) {
+      const currentSeats = await client.query(
+        "SELECT id, x, y, rotation, label FROM venue_layout_seats ORDER BY created_at, id",
+      );
+      if (currentSeats.rows.length) {
+        const numberedSeats = renumberSeatsByVisualOrder(currentSeats.rows);
+        await client.query(
+          `UPDATE venue_layout_seats seat
+              SET label = numbered.label
+             FROM UNNEST($1::uuid[], $2::text[]) AS numbered(id, label)
+            WHERE seat.id = numbered.id`,
+          [numberedSeats.map((seat) => seat.id), numberedSeats.map((seat) => seat.label)],
+        );
+        await client.query(
+          "INSERT INTO app_migrations (key) VALUES ('2026-09-order-custom-seat-labels')",
+        );
+      }
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
