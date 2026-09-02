@@ -14,6 +14,7 @@ export type SeatPlanSeat = {
   x: number | null;
   y: number | null;
   rotation: number;
+  price?: string | number | null;
 };
 
 export type SeatPlanType = "architectural" | "custom";
@@ -36,6 +37,7 @@ export default function InteractiveSeatPlan({
   allowOccupiedSelection = false,
   planImageUrl = "/venue-plan-reference.png",
   planType,
+  defaultSeatPrice = 0,
 }: {
   seats: SeatPlanSeat[];
   venueTables: VenueTable[];
@@ -45,6 +47,7 @@ export default function InteractiveSeatPlan({
   allowOccupiedSelection?: boolean;
   planImageUrl?: string;
   planType: SeatPlanType;
+  defaultSeatPrice?: number;
 }) {
   const isMobile = useSyncExternalStore(subscribeToMobile, getMobileSnapshot, getServerMobileSnapshot);
   const [manualZoom, setManualZoom] = useState<number | null>(null);
@@ -114,7 +117,9 @@ export default function InteractiveSeatPlan({
             const occupied = seat.status === "occupied";
             const selected = selectedSeatId === seat.id || selectedSeatIds?.includes(seat.id) === true;
             const canSelect = !!onSelect && (!occupied || allowOccupiedSelection);
-            const label = `Asiento ${seat.row_label}${occupied ? ", ocupado" : ", disponible"}`;
+            const effectivePrice = Number(seat.price ?? defaultSeatPrice);
+            const priceLabel = effectivePrice > 0 ? `, $${effectivePrice.toLocaleString("es-MX")} MXN` : ", sin costo";
+            const label = `Asiento ${seat.row_label}${occupied ? ", ocupado" : ", disponible"}${priceLabel}`;
 
             if (planType === "custom") {
               const fill = selected ? "#d7b35a" : occupied ? "#7f1d1d" : "#ffffff";

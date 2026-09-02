@@ -137,7 +137,7 @@ export default async function Eventos() {
                         {event.seating_mode !== "none" ? (
                           <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/55">
                             {event.seating_mode === "assigned" ? "Selección en plano" : "Lugar libre"} · {event.capacity} lugares
-                            {Number(event.seat_price) > 0 ? ` · $${Number(event.seat_price).toLocaleString("es-MX")} MXN` : " · Gratuito"}
+                            {event.seating_mode === "assigned" ? " · Precios según asiento" : Number(event.seat_price) > 0 ? ` · $${Number(event.seat_price).toLocaleString("es-MX")} MXN` : " · Gratuito"}
                           </p>
                         ) : null}
                       </div>

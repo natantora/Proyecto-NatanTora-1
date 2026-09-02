@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS event_seats (
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   row_label TEXT NOT NULL,
   seat_number INT NOT NULL,
+  price NUMERIC(10,2),
   status TEXT NOT NULL DEFAULT 'available'
     CHECK (status IN ('available', 'occupied')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -163,9 +164,20 @@ CREATE INDEX IF NOT EXISTS idx_event_seats_status ON event_seats(event_id, statu
 ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS x REAL;
 ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS y REAL;
 ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS rotation REAL NOT NULL DEFAULT 0;
+-- Un precio nulo usa el precio general del evento. Un valor, incluso 0,
+-- permite crear zonas de precios o cortesías específicas por asiento.
+ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS price NUMERIC(10,2);
 -- Los lugares retirados permanecen únicamente si existe historial asociado;
 -- nunca se muestran, cuentan en el cupo ni pueden volver a reservarse.
 ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS retired BOOLEAN NOT NULL DEFAULT FALSE;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'event_seats_price_check') THEN
+    ALTER TABLE event_seats ADD CONSTRAINT event_seats_price_check
+      CHECK (price IS NULL OR (price >= 0 AND price <= 1000000));
+  END IF;
+END $$;
 
 -- Plano real y único del salón: mesas y paredes (decorativas, dan contexto
 -- visual) y sillas (los lugares reservables). Al crear un evento con

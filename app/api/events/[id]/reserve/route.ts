@@ -27,9 +27,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (!event) throw new Error("EVENT_NOT_FOUND");
       if (event.seating_mode === "none") throw new Error("NO_RESERVATIONS");
       if (!event.published || !event.reservations_open) throw new Error("RESERVATIONS_CLOSED");
-      const unitPrice = Number(event.seat_price ?? 0);
-      if (unitPrice > 0 && body.policyAccepted !== true) throw new Error("POLICY_REQUIRED");
-      if (unitPrice > 0 && !useMercadoPago && !stripeConfigured()) throw new Error("PAYMENTS_UNAVAILABLE");
+      const defaultUnitPrice = Number(event.seat_price ?? 0);
       const holdMinutes = useMercadoPago ? 10 : 30;
 
       const existing = await client.query(
@@ -39,7 +37,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       );
       if (existing.rowCount) throw new Error("ALREADY_RESERVED");
 
-      let seats: { id: string; row_label: string; seat_number: number; x: number | null }[] = [];
+      let seats: { id: string; row_label: string; seat_number: number; x: number | null; unitPrice: number }[] = [];
       if (event.seating_mode === "open") {
         const countResult = await client.query<{ count: string }>(
           `SELECT COUNT(*)::text AS count FROM event_reservations WHERE event_id = $1
@@ -51,17 +49,22 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         const requestedIds: unknown[] = Array.isArray(body.seatIds) ? body.seatIds : typeof body.seatId === "string" ? [body.seatId] : [];
         const seatIds = [...new Set(requestedIds.filter((seatId): seatId is string => typeof seatId === "string" && seatId.length > 0))].slice(0, 20);
         if (!seatIds.length) throw new Error("SEAT_REQUIRED");
-        const seatResult = await client.query<{ id: string; row_label: string; seat_number: number; status: string; x: number | null }>(
-          "SELECT id, row_label, seat_number, status, x FROM event_seats WHERE id = ANY($1::uuid[]) AND event_id = $2 AND retired = FALSE ORDER BY id FOR UPDATE",
+        const seatResult = await client.query<{ id: string; row_label: string; seat_number: number; status: string; x: number | null; price: string | null }>(
+          "SELECT id, row_label, seat_number, status, x, price::text FROM event_seats WHERE id = ANY($1::uuid[]) AND event_id = $2 AND retired = FALSE ORDER BY id FOR UPDATE",
           [seatIds, eventId],
         );
         if (seatResult.rows.length !== seatIds.length || seatResult.rows.some((seat) => seat.status !== "available")) throw new Error("SEAT_UNAVAILABLE");
         const byId = new Map(seatResult.rows.map((seat) => [seat.id, seat]));
-        seats = seatIds.map((seatId) => byId.get(seatId)).filter((seat): seat is NonNullable<typeof seat> => Boolean(seat));
+        seats = seatIds
+          .map((seatId) => byId.get(seatId))
+          .filter((seat): seat is NonNullable<typeof seat> => Boolean(seat))
+          .map((seat) => ({ ...seat, unitPrice: Number(seat.price ?? defaultUnitPrice) }));
       }
 
       const quantity = Math.max(1, seats.length);
-      const total = Math.round(unitPrice * quantity * 100) / 100;
+      const total = Math.round((seats.length ? seats.reduce((sum, seat) => sum + seat.unitPrice, 0) : defaultUnitPrice) * 100) / 100;
+      if (total > 0 && body.policyAccepted !== true) throw new Error("POLICY_REQUIRED");
+      if (total > 0 && !useMercadoPago && !stripeConfigured()) throw new Error("PAYMENTS_UNAVAILABLE");
       let paymentId: string | null = null;
       if (total > 0) {
         const payment = await client.query<{ id: string }>(
@@ -79,22 +82,22 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
       const status = total > 0 ? "pending" : "confirmed";
       const reservations = seats.length
-        ? await client.query<{ id: string; event_id: string; seat_id: string | null; created_at: Date }>(
+        ? await client.query<{ id: string; event_id: string; seat_id: string | null; unit_price: string; created_at: Date }>(
           `INSERT INTO event_reservations
             (event_id, user_id, seat_id, holder_name, holder_email, holder_phone, unit_price, status, expires_at, payment_id)
-           SELECT $1, $2, selected_seat_id, $4, $5, $6, $7, $8,
+           SELECT $1, $2, selected_seat_id, $5, $6, $7, selected_unit_price, $8,
                   CASE WHEN $8 = 'pending' THEN NOW() + ($10::INT * INTERVAL '1 minute') ELSE NULL END, $9
-             FROM unnest($3::uuid[]) AS selected_seat_id
-           RETURNING id, event_id, seat_id, created_at`,
-          [eventId, user.id, seats.map((seat) => seat.id), user.full_name || user.email, user.email, user.phone, unitPrice, status, paymentId, holdMinutes],
+             FROM unnest($3::uuid[], $4::numeric[]) AS selected(selected_seat_id, selected_unit_price)
+           RETURNING id, event_id, seat_id, unit_price, created_at`,
+          [eventId, user.id, seats.map((seat) => seat.id), seats.map((seat) => seat.unitPrice), user.full_name || user.email, user.email, user.phone, status, paymentId, holdMinutes],
         )
-        : await client.query<{ id: string; event_id: string; seat_id: string | null; created_at: Date }>(
+        : await client.query<{ id: string; event_id: string; seat_id: string | null; unit_price: string; created_at: Date }>(
           `INSERT INTO event_reservations
             (event_id, user_id, seat_id, holder_name, holder_email, holder_phone, unit_price, status, expires_at, payment_id)
            VALUES ($1, $2, NULL, $3, $4, $5, $6, $7,
                    CASE WHEN $7 = 'pending' THEN NOW() + ($9::INT * INTERVAL '1 minute') ELSE NULL END, $8)
-           RETURNING id, event_id, seat_id, created_at`,
-          [eventId, user.id, user.full_name || user.email, user.email, user.phone, unitPrice, status, paymentId, holdMinutes],
+           RETURNING id, event_id, seat_id, unit_price, created_at`,
+          [eventId, user.id, user.full_name || user.email, user.email, user.phone, defaultUnitPrice, status, paymentId, holdMinutes],
         );
       if (seats.length) await client.query("UPDATE event_seats SET status = 'occupied' WHERE id = ANY($1::uuid[])", [seats.map((seat) => seat.id)]);
       const labels = seats.map((seat) => seat.x !== null ? seat.row_label : `${seat.row_label}${seat.seat_number}`);
@@ -111,7 +114,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       const session = await stripeClient().checkout.sessions.create({
         mode: "payment",
         customer_email: user.email,
-        line_items: [{ price_data: { currency: "mxn", unit_amount: Math.round(Number(result.event.seat_price) * 100), product_data: { name: result.event.title, description: result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre" } }, quantity: result.quantity }],
+        line_items: [{ price_data: { currency: "mxn", unit_amount: Math.round(result.total * 100), product_data: { name: result.event.title, description: result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre" } }, quantity: 1 }],
         metadata: commonMetadata,
         payment_intent_data: { metadata: commonMetadata },
         success_url: `${publicSiteUrl()}/eventos/${eventId}?payment=success&session_id={CHECKOUT_SESSION_ID}`,

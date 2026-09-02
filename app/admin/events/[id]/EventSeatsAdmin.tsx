@@ -2,19 +2,21 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Gift, Loader2, Printer, User } from "lucide-react";
+import { CircleDollarSign, Gift, Loader2, MousePointer2, Printer, Save, User } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
 import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
 type SeatingMode = "none" | "open" | "assigned";
-type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
+type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number; price: string | number | null };
 type Reservation = { id: string; seat_id: string | null; holder_name: string; holder_email: string; holder_phone: string | null; created_at: string };
+type SelectionMode = "inspect" | "price" | "courtesy";
 
-export default function EventSeatsAdmin({ eventId, seatingMode, planType, capacity, seats, reservations, reservationCount, venueTables, canViewReservations }: {
+export default function EventSeatsAdmin({ eventId, seatingMode, planType, capacity, defaultSeatPrice, seats, reservations, reservationCount, venueTables, canViewReservations }: {
   eventId: string;
   seatingMode: SeatingMode;
   planType: SeatPlanType;
   capacity: number | null;
+  defaultSeatPrice: number;
   seats: Seat[];
   reservations: Reservation[];
   reservationCount: number;
@@ -23,6 +25,12 @@ export default function EventSeatsAdmin({ eventId, seatingMode, planType, capaci
 }) {
   const router = useRouter();
   const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>("inspect");
+  const [priceSeatIds, setPriceSeatIds] = useState<string[]>([]);
+  const [priceInput, setPriceInput] = useState(String(defaultSeatPrice));
+  const [savingPrice, setSavingPrice] = useState(false);
+  const [priceError, setPriceError] = useState("");
+  const [priceSuccess, setPriceSuccess] = useState("");
   const [courtesySeatIds, setCourtesySeatIds] = useState<string[]>([]);
   const [courtesyName, setCourtesyName] = useState("Cortesía del Midrash");
   const [savingCourtesy, setSavingCourtesy] = useState(false);
@@ -55,14 +63,73 @@ export default function EventSeatsAdmin({ eventId, seatingMode, planType, capaci
   const selectedReservation = selectedSeatId ? reservationBySeat.get(selectedSeatId) : null;
   const selectedSeat = selectedSeatId ? seats.find((s) => s.id === selectedSeatId) : null;
   const occupiedCount = seats.filter((s) => s.status === "occupied").length;
+  const selectedSeatPrice = selectedSeat ? Number(selectedSeat.price ?? defaultSeatPrice) : null;
+  const priceGroups = [...seats.reduce((groups, seat) => {
+    const price = Number(seat.price ?? defaultSeatPrice);
+    groups.set(price, (groups.get(price) ?? 0) + 1);
+    return groups;
+  }, new Map<number, number>())].sort(([a], [b]) => a - b);
+  const activeSeatIds = selectionMode === "price" ? priceSeatIds : selectionMode === "courtesy" ? courtesySeatIds : [];
 
   function selectSeat(seatId: string) {
     const seat = seats.find((item) => item.id === seatId);
     setSelectedSeatId(seatId);
     setCourtesyError("");
     setCourtesySuccess("");
+    setPriceError("");
+    setPriceSuccess("");
     if (!canViewReservations || !seat || seat.status === "occupied") return;
-    setCourtesySeatIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
+    if (selectionMode === "price") {
+      setPriceSeatIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
+    } else if (selectionMode === "courtesy") {
+      setCourtesySeatIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
+    }
+  }
+
+  function changeSelectionMode(mode: SelectionMode) {
+    setSelectionMode(mode);
+    if (mode === "price") setCourtesySeatIds([]);
+    if (mode === "courtesy") setPriceSeatIds([]);
+    setSelectedSeatId(null);
+    setPriceError("");
+    setPriceSuccess("");
+    setCourtesyError("");
+    setCourtesySuccess("");
+  }
+
+  async function saveSeatPrices(useDefault = false) {
+    if (!priceSeatIds.length) return;
+    setSavingPrice(true);
+    setPriceError("");
+    setPriceSuccess("");
+    try {
+      const response = await fetch(`/api/admin/events/${eventId}/seat-prices`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seat_ids: priceSeatIds, price: priceInput, use_default: useDefault }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "No fue posible guardar los precios");
+      setPriceSuccess(`${priceSeatIds.length} ${priceSeatIds.length === 1 ? "asiento actualizado" : "asientos actualizados"}.`);
+      setPriceSeatIds([]);
+      setSelectedSeatId(null);
+      setSelectionMode("inspect");
+      router.refresh();
+    } catch (caught) {
+      setPriceError(caught instanceof Error ? caught.message : "No fue posible guardar los precios");
+    } finally {
+      setSavingPrice(false);
+    }
+  }
+
+  function selectPriceGroup(price: number) {
+    setSelectionMode("price");
+    setCourtesySeatIds([]);
+    setSelectedSeatId(null);
+    setPriceInput(String(price));
+    setPriceSeatIds(seats.filter((seat) => seat.status === "available" && Number(seat.price ?? defaultSeatPrice) === price).map((seat) => seat.id));
+    setPriceError("");
+    setPriceSuccess("");
   }
 
   async function reserveCourtesy() {
@@ -81,6 +148,7 @@ export default function EventSeatsAdmin({ eventId, seatingMode, planType, capaci
       setCourtesySuccess(`${courtesySeatIds.length} ${courtesySeatIds.length === 1 ? "asiento reservado" : "asientos reservados"} como cortesía sin costo.`);
       setCourtesySeatIds([]);
       setSelectedSeatId(null);
+      setSelectionMode("inspect");
       router.refresh();
     } catch (caught) {
       setCourtesyError(caught instanceof Error ? caught.message : "No fue posible apartar los asientos");
@@ -99,11 +167,12 @@ export default function EventSeatsAdmin({ eventId, seatingMode, planType, capaci
         <InteractiveSeatPlan
           seats={seats}
           venueTables={venueTables}
-          selectedSeatId={selectedSeatId}
-          selectedSeatIds={courtesySeatIds}
+          selectedSeatId={selectionMode === "inspect" ? selectedSeatId : null}
+          selectedSeatIds={activeSeatIds}
           onSelect={selectSeat}
           allowOccupiedSelection
           planType={planType}
+          defaultSeatPrice={defaultSeatPrice}
         />
         <div className="space-y-4">
           <div className="flex gap-4 text-xs text-midrash-600">
@@ -111,9 +180,33 @@ export default function EventSeatsAdmin({ eventId, seatingMode, planType, capaci
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-red-500 bg-red-100" /> Ocupado</span>
           </div>
           {canViewReservations ? (
+            <div className={`rounded-xl border p-4 ${selectionMode === "price" ? "border-gold bg-gold/10" : "border-midrash-200 bg-white"}`}>
+              <p className="flex items-center gap-2 font-serif text-lg font-bold text-navy"><CircleDollarSign className="h-5 w-5 text-gold-deep" /> Precios por grupos</p>
+              <p className="mt-1 text-xs leading-relaxed text-midrash-600">Activa la selección, marca varias sillas y asigna su precio. Repite el proceso para crear todos los grupos que necesites.</p>
+              <button type="button" onClick={() => changeSelectionMode(selectionMode === "price" ? "inspect" : "price")} className="btn-secondary mt-3 w-full justify-center">
+                <MousePointer2 className="h-4 w-4" /> {selectionMode === "price" ? "Terminar selección" : "Seleccionar sillas"}
+              </button>
+              <label className="mt-4 block text-[10px] font-bold uppercase tracking-[0.16em] text-midrash-600">Precio del grupo (MXN)</label>
+              <input value={priceInput} onChange={(event) => setPriceInput(event.target.value)} type="number" min="0" max="1000000" step="0.01" className="input mt-1 normal-case" />
+              <button type="button" onClick={() => saveSeatPrices(false)} disabled={savingPrice || priceSeatIds.length === 0} className="btn-primary mt-3 w-full justify-center disabled:opacity-50">
+                {savingPrice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Aplicar precio{priceSeatIds.length ? ` (${priceSeatIds.length})` : ""}
+              </button>
+              <button type="button" onClick={() => saveSeatPrices(true)} disabled={savingPrice || priceSeatIds.length === 0} className="mt-2 w-full text-xs font-semibold text-midrash-600 underline underline-offset-4 disabled:opacity-50">Usar precio general en la selección</button>
+              <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.12em] text-midrash-500">Grupos actuales · toca uno para seleccionar sus sillas libres</p>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {priceGroups.map(([price, count]) => <button type="button" onClick={() => selectPriceGroup(price)} key={price} className="rounded-full bg-midrash-50 px-2.5 py-1 text-[10px] font-semibold text-midrash-700 hover:bg-gold/20">{price > 0 ? `$${price.toLocaleString("es-MX")} MXN` : "Gratis"} · {count}</button>)}
+              </div>
+              {priceSuccess ? <p className="mt-2 text-xs font-semibold text-green-700">{priceSuccess}</p> : null}
+              {priceError ? <p className="mt-2 text-xs text-red-700">{priceError}</p> : null}
+            </div>
+          ) : null}
+          {canViewReservations ? (
             <div className="rounded-xl border border-gold/35 bg-gold/10 p-4">
               <p className="flex items-center gap-2 font-serif text-lg font-bold text-navy"><Gift className="h-4 w-4 text-gold-deep" /> Cortesías del administrador</p>
-              <p className="mt-1 text-xs leading-relaxed text-midrash-600">Selecciona uno o varios asientos libres en el plano. Se ocuparán inmediatamente y no generarán ningún cobro.</p>
+              <p className="mt-1 text-xs leading-relaxed text-midrash-600">Activa esta selección y marca uno o varios asientos libres. Se ocuparán inmediatamente y no generarán ningún cobro.</p>
+              <button type="button" onClick={() => changeSelectionMode(selectionMode === "courtesy" ? "inspect" : "courtesy")} className="btn-secondary mt-3 w-full justify-center">
+                <MousePointer2 className="h-4 w-4" /> {selectionMode === "courtesy" ? "Terminar selección" : "Seleccionar cortesías"}
+              </button>
               <label className="mt-4 block text-[10px] font-bold uppercase tracking-[0.16em] text-midrash-600">Nombre o referencia</label>
               <input value={courtesyName} onChange={(event) => setCourtesyName(event.target.value)} maxLength={120} className="input mt-1 normal-case" placeholder="Cortesía del Midrash" />
               <button type="button" onClick={reserveCourtesy} disabled={savingCourtesy || courtesySeatIds.length === 0} className="btn-primary mt-3 w-full justify-center disabled:opacity-50">
@@ -126,6 +219,7 @@ export default function EventSeatsAdmin({ eventId, seatingMode, planType, capaci
           {selectedSeatId ? (
             <div className="rounded-xl border border-midrash-200 bg-midrash-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-midrash-600">Asiento {selectedSeat?.row_label}</p>
+              {selectedSeatPrice !== null ? <p className="mt-1 text-sm font-bold text-gold-deep">{selectedSeatPrice > 0 ? `$${selectedSeatPrice.toLocaleString("es-MX")} MXN` : "Sin costo"}{selectedSeat?.price === null ? " · precio general" : " · precio especial"}</p> : null}
               {selectedReservation && canViewReservations ? (
                 <div className="mt-2 space-y-1">
                   <p className="flex items-center gap-1.5 font-serif text-lg font-bold text-navy"><User className="h-4 w-4 text-gold-deep" /> {selectedReservation.holder_name}</p>
@@ -136,7 +230,7 @@ export default function EventSeatsAdmin({ eventId, seatingMode, planType, capaci
               ) : selectedSeat?.status === "occupied" ? (
                 <p className="mt-2 text-sm text-midrash-500">Ocupado. Los datos personales solo están disponibles para Administradores y Propietarios.</p>
               ) : (
-                <p className="mt-2 text-sm text-midrash-500">{courtesySeatIds.includes(selectedSeatId) ? "Seleccionado para cortesía sin costo." : "Disponible — nadie lo ha reservado."}</p>
+                <p className="mt-2 text-sm text-midrash-500">{priceSeatIds.includes(selectedSeatId) ? "Seleccionado para asignar precio." : courtesySeatIds.includes(selectedSeatId) ? "Seleccionado para cortesía sin costo." : "Disponible — nadie lo ha reservado."}</p>
               )}
             </div>
           ) : (

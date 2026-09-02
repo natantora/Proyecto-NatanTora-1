@@ -6,8 +6,8 @@ import { AlertTriangle, Armchair, CheckCircle2, Loader2, Users } from "lucide-re
 import type { VenueTable } from "@/lib/venue-layout";
 import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
-type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number };
-type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null };
+type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number; price: string | number | null };
+type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null; unit_price: string | number };
 type PendingPayment = { id: string; expires_at: string; seats: string[] };
 
 export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, pendingPayment: initialPendingPayment, reservedCount, paymentResult, sessionId, internalPaymentId, providerPaymentId, cancelledPaymentId }: {
@@ -25,6 +25,10 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   const [pendingPayment, setPendingPayment] = useState(initialPendingPayment);
   const [cancellingPending, setCancellingPending] = useState(false);
   const [policyAccepted, setPolicyAccepted] = useState(false);
+  const selectedTotal = mode === "assigned"
+    ? seats.filter((seat) => selectedIds.includes(seat.id)).reduce((sum, seat) => sum + Number(seat.price ?? seatPrice), 0)
+    : seatPrice;
+  const paymentRequired = selectedTotal > 0;
   const hasMap = seats.length > 0 && seats.every((seat) => seat.x !== null && seat.y !== null);
   const rows = useMemo(() => {
     const grouped = new Map<string, Seat[]>();
@@ -78,7 +82,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   }
 
   async function reserve() {
-    if (seatPrice > 0 && !policyAccepted) { setError("Confirma la política de compra antes de continuar."); return; }
+    if (paymentRequired && !policyAccepted) { setError("Confirma la política de compra antes de continuar."); return; }
     setLoading(true); setError("");
     try {
       const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds, policyAccepted } : { policyAccepted }) });
@@ -110,7 +114,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
       <CheckCircle2 className="mx-auto h-10 w-10 text-gold-deep" />
       <h2 className="mt-4 font-serif text-2xl font-bold text-navy">{reservations.length > 1 ? "Tus lugares están reservados" : "Tu lugar está reservado"}</h2>
       {mode === "assigned" ? (
-        <><p className="mt-2 text-ink-soft">Asientos <strong>{reservations.map((item) => item.x !== null ? item.row_label : `${item.row_label ?? ""}${item.seat_number ?? ""}`).join(", ")}</strong></p>{seatPrice > 0 ? <p className="mt-2 text-sm font-semibold text-navy">Total: ${(seatPrice * reservations.length).toLocaleString("es-MX")} MXN</p> : null}</>
+        <><p className="mt-2 text-ink-soft">Asientos <strong>{reservations.map((item) => item.x !== null ? item.row_label : `${item.row_label ?? ""}${item.seat_number ?? ""}`).join(", ")}</strong></p>{reservations.some((item) => Number(item.unit_price) > 0) ? <p className="mt-2 text-sm font-semibold text-navy">Total: ${reservations.reduce((sum, item) => sum + Number(item.unit_price), 0).toLocaleString("es-MX")} MXN</p> : null}</>
       ) : <p className="mt-2 text-ink-soft">Tu acceso es de lugar libre; al llegar podrás ocupar el lugar disponible que prefieras.</p>}
     </div>
   );
@@ -152,13 +156,13 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   const toggleSeat = (seatId: string) => setSelectedIds((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
   const selectedNames = selected.map((seat) => seat.x !== null ? seat.row_label : `${seat.row_label}${seat.seat_number}`);
   const compactNames = selectedNames.length > 4 ? `${selectedNames.slice(0, 4).join(", ")} y ${selectedNames.length - 4} más` : selectedNames.join(", ");
-  const confirmText = loading ? <Loader2 className="h-4 w-4 animate-spin" /> : seatPrice > 0 ? `Pagar ${selectedIds.length > 1 ? `${selectedIds.length} asientos` : "asiento"}` : selectedIds.length > 1 ? `Confirmar ${selectedIds.length} asientos` : "Confirmar asiento";
+  const confirmText = loading ? <Loader2 className="h-4 w-4 animate-spin" /> : paymentRequired ? `Pagar ${selectedIds.length > 1 ? `${selectedIds.length} asientos` : "asiento"}` : selectedIds.length > 1 ? `Confirmar ${selectedIds.length} asientos` : "Confirmar asiento";
   const reservationControls = (
     <div className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-gold/30 bg-cream-light/95 px-4 py-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(10,29,54,.16)] backdrop-blur sm:static sm:mt-6 sm:flex sm:justify-between sm:border-line sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-5 sm:shadow-none" aria-live="polite">
       <p className="min-w-0 text-sm text-ink-soft">
-        {selected.length > 0 ? <><strong className="block text-navy sm:inline">{selected.length} {selected.length === 1 ? "asiento" : "asientos"}</strong><span className="block truncate sm:ml-1 sm:inline">{compactNames}{seatPrice > 0 ? ` · $${(seatPrice * selected.length).toLocaleString("es-MX")} MXN` : ""}</span></> : "Selecciona uno o varios lugares"}
+        {selected.length > 0 ? <><strong className="block text-navy sm:inline">{selected.length} {selected.length === 1 ? "asiento" : "asientos"}</strong><span className="block truncate sm:ml-1 sm:inline">{compactNames}{selectedTotal > 0 ? ` · $${selectedTotal.toLocaleString("es-MX")} MXN` : " · Sin costo"}</span></> : "Selecciona uno o varios lugares"}
       </p>
-      <button onClick={reserve} disabled={loading || selectedIds.length === 0 || (seatPrice > 0 && !policyAccepted)} className="btn-primary min-h-11 shrink-0 justify-center px-4">{confirmText}</button>
+      <button onClick={reserve} disabled={loading || selectedIds.length === 0 || (paymentRequired && !policyAccepted)} className="btn-primary min-h-11 shrink-0 justify-center px-4">{confirmText}</button>
     </div>
   );
 
@@ -172,7 +176,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
           return <button key={seat.id} type="button" disabled={occupied} onClick={() => toggleSeat(seat.id)} aria-pressed={isSelected} aria-label={`Asiento ${seat.row_label}${seat.seat_number}${occupied ? ", ocupado" : isSelected ? ", seleccionado" : ", disponible"}`} className={`h-10 w-10 rounded-t-lg border text-xs font-bold transition-colors ${occupied ? "cursor-not-allowed border-navy bg-navy text-cream/45" : isSelected ? "border-gold-deep bg-gold text-navy" : "border-gold/50 bg-white text-navy hover:bg-gold/15"}`}>{seat.seat_number}</button>;
         })}</div>)}
       </div></div>
-      {seatPrice > 0 ? <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} /> : null}
+      {paymentRequired ? <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} /> : null}
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
       {reservationControls}
     </div>;
@@ -188,10 +192,11 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
         selectedSeatIds={selectedIds}
         onSelect={toggleSeat}
         planType={planType}
+        defaultSeatPrice={seatPrice}
       />
     </div>
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-muted sm:text-xs"><span><strong className="text-gold-deep">Dorado</strong> seleccionado</span><span><strong className="text-red-800">Rojo</strong> ocupado</span></div>
-    {seatPrice > 0 ? <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} /> : null}
+    {paymentRequired ? <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} /> : null}
     {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
     {reservationControls}
   </div>;
