@@ -24,6 +24,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   const [error, setError] = useState("");
   const [pendingPayment, setPendingPayment] = useState(initialPendingPayment);
   const [cancellingPending, setCancellingPending] = useState(false);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
   const hasMap = seats.length > 0 && seats.every((seat) => seat.x !== null && seat.y !== null);
   const rows = useMemo(() => {
     const grouped = new Map<string, Seat[]>();
@@ -77,9 +78,10 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   }
 
   async function reserve() {
+    if (seatPrice > 0 && !policyAccepted) { setError("Confirma la política de compra antes de continuar."); return; }
     setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds } : {}) });
+      const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds, policyAccepted } : { policyAccepted }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
       if (body.requiresPayment && body.url) { window.location.href = body.url; return; }
@@ -141,7 +143,8 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
         <p className="mt-4 text-sm font-semibold text-navy">Quedan {remaining} de {capacity} lugares{seatPrice > 0 ? ` · ${seatPrice.toLocaleString("es-MX", { style: "currency", currency: "MXN" })}` : " · Gratuito"}</p>
       </div></div>
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
-      <button onClick={reserve} disabled={loading || remaining === 0} className="btn-primary mt-6 w-full justify-center sm:w-auto">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : remaining === 0 ? "Cupo completo" : seatPrice > 0 ? "Continuar al pago" : "Reservar mi lugar"}</button>
+      {seatPrice > 0 ? <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} /> : null}
+      <button onClick={reserve} disabled={loading || remaining === 0 || (seatPrice > 0 && !policyAccepted)} className="btn-primary mt-6 w-full justify-center sm:w-auto">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : remaining === 0 ? "Cupo completo" : seatPrice > 0 ? "Continuar al pago" : "Reservar mi lugar"}</button>
     </div>;
   }
 
@@ -155,7 +158,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
       <p className="min-w-0 text-sm text-ink-soft">
         {selected.length > 0 ? <><strong className="block text-navy sm:inline">{selected.length} {selected.length === 1 ? "asiento" : "asientos"}</strong><span className="block truncate sm:ml-1 sm:inline">{compactNames}{seatPrice > 0 ? ` · $${(seatPrice * selected.length).toLocaleString("es-MX")} MXN` : ""}</span></> : "Selecciona uno o varios lugares"}
       </p>
-      <button onClick={reserve} disabled={loading || selectedIds.length === 0} className="btn-primary min-h-11 shrink-0 justify-center px-4">{confirmText}</button>
+      <button onClick={reserve} disabled={loading || selectedIds.length === 0 || (seatPrice > 0 && !policyAccepted)} className="btn-primary min-h-11 shrink-0 justify-center px-4">{confirmText}</button>
     </div>
   );
 
@@ -169,6 +172,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
           return <button key={seat.id} type="button" disabled={occupied} onClick={() => toggleSeat(seat.id)} aria-pressed={isSelected} aria-label={`Asiento ${seat.row_label}${seat.seat_number}${occupied ? ", ocupado" : isSelected ? ", seleccionado" : ", disponible"}`} className={`h-10 w-10 rounded-t-lg border text-xs font-bold transition-colors ${occupied ? "cursor-not-allowed border-navy bg-navy text-cream/45" : isSelected ? "border-gold-deep bg-gold text-navy" : "border-gold/50 bg-white text-navy hover:bg-gold/15"}`}>{seat.seat_number}</button>;
         })}</div>)}
       </div></div>
+      {seatPrice > 0 ? <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} /> : null}
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
       {reservationControls}
     </div>;
@@ -187,7 +191,15 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
       />
     </div>
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-muted sm:text-xs"><span><strong className="text-gold-deep">Dorado</strong> seleccionado</span><span><strong className="text-red-800">Rojo</strong> ocupado</span></div>
+    {seatPrice > 0 ? <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} /> : null}
     {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
     {reservationControls}
   </div>;
+}
+
+function PurchasePolicy({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
+  return <label className="mt-5 flex cursor-pointer items-start gap-3 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-[#BD9040]" />
+    <span><strong className="block text-navy">Política de compra y asignación de lugar</strong><span className="mt-1 block text-xs leading-relaxed">Entiendo que, una vez confirmado el pago, la reservación y los asientos elegidos son definitivos. No se permiten cancelaciones, cambios ni reembolsos.</span></span>
+  </label>;
 }

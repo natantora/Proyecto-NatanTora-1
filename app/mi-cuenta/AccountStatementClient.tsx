@@ -102,7 +102,7 @@ export default function AccountStatementClient({ account, charges, allCharges, p
             {payments.length > 0 ? <div>{payments.map((payment) => <article key={payment.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-line-soft p-4 last:border-b-0 sm:grid-cols-[120px_minmax(0,1fr)_160px_130px] sm:items-center sm:px-5">
               <div className="col-span-2 text-[11px] text-ink-muted sm:col-span-1">{new Date(payment.paid_at || payment.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}</div>
               <div><strong className="block text-[13px] text-navy">{payment.description || "Pago de estado de cuenta"}</strong><span className="text-[11px] text-ink-muted">{payment.payment_method === "cash" ? "Efectivo" : payment.payment_method === "mercadopago" ? "Mercado Pago" : payment.payment_method === "stripe" ? "Tarjeta" : payment.payment_method || "Otro"}</span></div>
-              <div className="self-end text-right text-[10px] font-bold uppercase tracking-[0.1em] text-green-700 sm:self-auto">Pago confirmado</div>
+              <div className="self-end text-right sm:self-auto"><div className="text-[10px] font-bold uppercase tracking-[0.1em] text-green-700">Pago confirmado</div><a href={`/api/receipts/${payment.id}`} className="mt-1 inline-block text-[10px] font-bold uppercase tracking-[0.1em] text-gold-deep underline">Descargar comprobante PDF</a></div>
               <strong className="col-span-2 text-right text-[15px] text-green-700 sm:col-span-1">− {mxn(payment.amount)}</strong>
             </article>)}</div> : <p className="p-8 text-center text-[12px] text-ink-muted">Todavía no hay pagos registrados.</p>}
           </div>

@@ -28,6 +28,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (event.seating_mode === "none") throw new Error("NO_RESERVATIONS");
       if (!event.published || !event.reservations_open) throw new Error("RESERVATIONS_CLOSED");
       const unitPrice = Number(event.seat_price ?? 0);
+      if (unitPrice > 0 && body.policyAccepted !== true) throw new Error("POLICY_REQUIRED");
       if (unitPrice > 0 && !useMercadoPago && !stripeConfigured()) throw new Error("PAYMENTS_UNAVAILABLE");
       const holdMinutes = useMercadoPago ? 10 : 30;
 
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             (user_id, amount, currency, status, payment_method, donor_name, donor_email,
              description, metadata, expires_at)
            VALUES ($1, $2, 'MXN', 'pending', $7, $3, $4, $5,
-                   jsonb_build_object('kind', 'event', 'event_id', $6::text), NOW() + ($8::INT * INTERVAL '1 minute'))
+                   jsonb_build_object('kind', 'event', 'event_id', $6::text, 'purchase_policy_version', '2026-09-01', 'purchase_policy_accepted', true), NOW() + ($8::INT * INTERVAL '1 minute'))
            RETURNING id`,
           [user.id, total, user.full_name || user.email, user.email, `${quantity} ${quantity === 1 ? "lugar" : "lugares"} · ${event.title}`, eventId, useMercadoPago ? "mercadopago" : "stripe", holdMinutes],
         );
@@ -133,6 +134,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       ALREADY_RESERVED: ["Ya tienes una reservación o un pago en proceso para este evento", 409], SOLD_OUT: ["Ya no hay lugares disponibles", 409],
       SEAT_REQUIRED: ["Selecciona al menos un asiento", 400], SEAT_UNAVAILABLE: ["Uno de esos asientos acaba de ser ocupado. Revisa tu selección.", 409],
       PAYMENTS_UNAVAILABLE: ["El pago de este evento no está disponible por el momento.", 503], CHECKOUT_FAILED: ["No fue posible abrir el pago seguro.", 500],
+      POLICY_REQUIRED: ["Debes aceptar la política de compra antes de continuar.", 400],
     };
     const [text, status] = responses[message] ?? ["No fue posible completar la reservación", 500];
     console.error("[events/reserve]", error);

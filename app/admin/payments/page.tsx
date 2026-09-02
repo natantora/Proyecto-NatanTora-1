@@ -55,6 +55,7 @@ export default async function AdminPaymentsPage() {
   LEFT JOIN events event ON event.id::text = payment.metadata->>'event_id'
    ORDER BY payment.created_at DESC LIMIT 500`,
   );
+  const events = await query<{ id: string; title: string }>("SELECT id, title FROM events ORDER BY event_date DESC LIMIT 200");
   const payments = result.rows;
   const paid = payments.filter((payment) => payment.status === "paid");
   const totalPaid = paid.reduce((sum, payment) => sum + Number(payment.amount), 0);
@@ -66,6 +67,17 @@ export default async function AdminPaymentsPage() {
 
   return <div className="space-y-6">
     <div><h1 className="font-serif text-3xl font-bold text-midrash-900">Pagos</h1><p className="mt-1 text-sm text-midrash-600">Historial unificado de estados de cuenta, donativos y reservaciones de eventos.</p></div>
+    <form action="/api/admin/reports/financial" method="GET" className="border border-line bg-cream-light p-4">
+      <div className="mb-3"><h2 className="font-semibold text-navy">Exportar para contabilidad</h2><p className="text-xs text-ink-soft">Filtra por fecha, persona, evento o método y descarga el reporte.</p></div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <label className="text-xs text-ink-soft">Desde<input name="from" type="date" className="mt-1 w-full border border-line bg-white px-3 py-2 text-sm" /></label>
+        <label className="text-xs text-ink-soft">Hasta<input name="to" type="date" className="mt-1 w-full border border-line bg-white px-3 py-2 text-sm" /></label>
+        <label className="text-xs text-ink-soft">Persona<input name="person" placeholder="Nombre o correo" className="mt-1 w-full border border-line bg-white px-3 py-2 text-sm" /></label>
+        <label className="text-xs text-ink-soft">Evento<select name="event_id" className="mt-1 w-full border border-line bg-white px-3 py-2 text-sm"><option value="">Todos</option>{events.rows.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}</select></label>
+        <label className="text-xs text-ink-soft">Método<select name="method" className="mt-1 w-full border border-line bg-white px-3 py-2 text-sm"><option value="">Todos</option><option value="mercadopago">Mercado Pago</option><option value="cash">Efectivo</option><option value="stripe">Stripe</option></select></label>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2"><button name="format" value="xlsx" className="bg-navy px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white">Descargar Excel</button><button name="format" value="pdf" className="border border-navy px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-navy">Descargar PDF</button></div>
+    </form>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
       <Stat icon={CircleDollarSign} label="Ingresos confirmados" value={formatMXN(totalPaid)} />
       <Stat icon={Gift} label="Donativos recibidos" value={formatMXN(donations)} />
@@ -132,6 +144,7 @@ function ProviderStatusInfo({ payment }: { payment: PaymentRow }) {
 
 function PaymentReferences({ payment }: { payment: PaymentRow }) {
   return <div className="font-mono text-[10px] text-midrash-500">
+    {payment.status === "paid" ? <a href={`/api/receipts/${payment.id}`} className="mb-2 inline-block font-sans font-bold uppercase tracking-wide text-gold-deep underline">Comprobante PDF</a> : null}
     {payment.mercadopago_payment_id ? <Reference label="Pago MP" value={payment.mercadopago_payment_id} /> : null}
     {payment.mercadopago_preference_id ? <Reference label="Preferencia" value={payment.mercadopago_preference_id} /> : null}
     {payment.stripe_payment_intent ? <Reference label="Pago Stripe" value={payment.stripe_payment_intent} /> : null}
