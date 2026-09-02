@@ -5,6 +5,7 @@ import { Armchair, Check, Loader2, Minus, MousePointer2, RectangleHorizontal, Ci
 import type { VenueSeat, VenueTable } from "@/lib/venue-layout";
 import { CANVAS_W, CANVAS_H, NEIGHBOR_SNAP, snapToGrid } from "@/lib/venue-canvas";
 import { nextNumericSeatLabel, renumberSeatsByVisualOrder } from "@/lib/seat-numbering";
+import CustomPlanFloorZone from "@/components/CustomPlanFloorZone";
 
 type Tool = "select" | "chair" | "rect" | "round" | "wall";
 type Selection = { type: "table"; id: string } | { type: "seat"; id: string } | null;
@@ -267,6 +268,8 @@ export default function VenueLayoutEditor({ initialTables, initialSeats }: { ini
             {showBg ? (
               <image href="/venue-plan-reference.png" x={0} y={0} width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="none" opacity={bgOpacity} className="pointer-events-none" />
             ) : null}
+
+            <CustomPlanFloorZone opacity={showBg ? 0.58 : 0.78} />
 
             {guide.x !== null ? <line x1={guide.x} y1={0} x2={guide.x} y2={CANVAS_H} className="stroke-red-400" strokeWidth={1} strokeDasharray="4 3" /> : null}
             {guide.y !== null ? <line x1={0} y1={guide.y} x2={CANVAS_W} y2={guide.y} className="stroke-red-400" strokeWidth={1} strokeDasharray="4 3" /> : null}

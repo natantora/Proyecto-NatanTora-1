@@ -5,6 +5,7 @@ import { query } from "@/lib/db";
 import { canManageSeats, type Role } from "@/lib/permissions";
 import { getEventVenueTables, type VenueTable } from "@/lib/venue-layout";
 import { CANVAS_H, CANVAS_W } from "@/lib/venue-canvas";
+import CustomPlanFloorZone from "@/components/CustomPlanFloorZone";
 import PrintButton from "./PrintButton";
 import styles from "./page.module.css";
 
@@ -80,7 +81,7 @@ function SeatChart({ event, seats, occupied, tables, region, overview }: { event
   const [x, y, width, height] = region.viewBox;
   const visibleSeats = seats.filter((seat) => isInside(seat, region.viewBox));
   return <svg className={styles.plan} viewBox={`${x} ${y} ${width} ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={`${region.name} con nombres de personas reservadas`}>
-    {event.seat_plan_type === "architectural" ? <image href="/venue-plan-reference.png" x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="none" /> : <Furniture tables={tables} />}
+    {event.seat_plan_type === "architectural" ? <image href="/venue-plan-reference.png" x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="none" /> : <><CustomPlanFloorZone /><Furniture tables={tables} /></>}
     {visibleSeats.map((seat) => seat.x !== null && seat.y !== null ? <circle key={`seat-${seat.id}`} cx={seat.x} cy={seat.y} r={overview ? 3.4 : 4.2} fill={seat.status === "occupied" ? "#8f2027" : "rgba(255,255,255,.72)"} stroke={seat.status === "occupied" ? "#5f1116" : "#9b7620"} strokeWidth={overview ? 1 : 1.4} /> : null)}
     {occupied.map((seat, index) => <SeatName key={seat.id} seat={seat} index={index} overview={overview} region={region.viewBox} />)}
   </svg>;

@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { Minus, Plus } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
 import { CANVAS_H, CANVAS_W } from "@/lib/venue-canvas";
+import CustomPlanFloorZone from "@/components/CustomPlanFloorZone";
 
 export type SeatPlanSeat = {
   id: string;
@@ -102,7 +103,10 @@ export default function InteractiveSeatPlan({
               className="pointer-events-none"
             />
           ) : (
-            <VenueFurniture tables={venueTables} />
+            <>
+              <CustomPlanFloorZone />
+              <VenueFurniture tables={venueTables} />
+            </>
           )}
 
           {seats.map((seat) => {
