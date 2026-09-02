@@ -120,6 +120,42 @@ try {
         );
       }
     }
+
+    // Conserva los IDs y las reservaciones de eventos personalizados ya
+    // creados; únicamente sincroniza su numeración con el orden visual.
+    const eventNumberingMigration = await client.query(
+      "SELECT 1 FROM app_migrations WHERE key = '2026-09-order-existing-custom-event-seat-labels'",
+    );
+    if (!eventNumberingMigration.rowCount) {
+      const eventSeats = await client.query(
+        `SELECT seat.id, seat.event_id, seat.x, seat.y, seat.row_label AS label
+           FROM event_seats seat
+           JOIN events event ON event.id = seat.event_id
+          WHERE event.seating_mode = 'assigned'
+            AND event.seat_plan_type = 'custom'
+            AND seat.retired = FALSE
+            AND seat.x IS NOT NULL
+            AND seat.y IS NOT NULL
+          ORDER BY seat.event_id, seat.created_at, seat.id`,
+      );
+      const seatsByEvent = Map.groupBy(eventSeats.rows, (seat) => seat.event_id);
+      const numberedEventSeats = [...seatsByEvent.values()].flatMap((seats) =>
+        renumberSeatsByVisualOrder(seats),
+      );
+      if (numberedEventSeats.length) {
+        await client.query(
+          `UPDATE event_seats seat
+              SET row_label = numbered.label,
+                  seat_number = numbered.label::integer
+             FROM UNNEST($1::uuid[], $2::text[]) AS numbered(id, label)
+            WHERE seat.id = numbered.id`,
+          [numberedEventSeats.map((seat) => seat.id), numberedEventSeats.map((seat) => seat.label)],
+        );
+      }
+      await client.query(
+        "INSERT INTO app_migrations (key) VALUES ('2026-09-order-existing-custom-event-seat-labels')",
+      );
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

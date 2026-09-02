@@ -4,6 +4,7 @@ import { transaction, query } from "@/lib/db";
 import { canEditEvents, type Role } from "@/lib/permissions";
 import { getVenueLayout } from "@/lib/venue-layout";
 import { ARCHITECTURAL_SEATS } from "@/lib/architectural-seat-map";
+import { renumberSeatsByVisualOrder } from "@/lib/seat-numbering";
 
 type SeatingMode = "none" | "open" | "assigned";
 type SeatPlanType = "architectural" | "custom";
@@ -58,7 +59,10 @@ export async function POST(req: NextRequest) {
       eventSeats = ARCHITECTURAL_SEATS;
     } else {
       venueLayout = await getVenueLayout();
-      eventSeats = venueLayout.seats;
+      eventSeats = renumberSeatsByVisualOrder(venueLayout.seats).map((seat, index) => ({
+        ...seat,
+        seatNumber: index + 1,
+      }));
     }
     if (eventSeats.length === 0) {
       return NextResponse.json(
