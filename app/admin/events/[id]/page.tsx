@@ -25,7 +25,7 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
 
   const [seatsResult, reservationsResult, reservationCountResult, venueTables] = await Promise.all([
     event.seating_mode === "assigned"
-      ? query<SeatRow>("SELECT id, row_label, seat_number, status, x, y, rotation FROM event_seats WHERE event_id = $1 ORDER BY row_label, seat_number", [id])
+      ? query<SeatRow>("SELECT id, row_label, seat_number, status, x, y, rotation FROM event_seats WHERE event_id = $1 AND retired = FALSE ORDER BY row_label, seat_number", [id])
       : Promise.resolve({ rows: [] as SeatRow[] }),
     canViewReservations
       ? query<ReservationRow>(
@@ -33,7 +33,10 @@ export default async function AdminEventDetailPage({ params }: { params: Promise
           [id],
         )
       : Promise.resolve({ rows: [] as ReservationRow[] }),
-    query<{ count: string }>("SELECT COUNT(*)::text AS count FROM event_reservations WHERE event_id = $1 AND status IN ('pending', 'confirmed')", [id]),
+    query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM event_reservations reservation
+      LEFT JOIN event_seats seat ON seat.id = reservation.seat_id
+      WHERE reservation.event_id = $1 AND (reservation.seat_id IS NULL OR seat.retired = FALSE)
+        AND reservation.status IN ('pending', 'confirmed')`, [id]),
     event.seating_mode === "assigned" ? getEventVenueTables(id) : Promise.resolve([]),
   ]);
 

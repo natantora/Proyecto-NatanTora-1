@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   let capacity: number | null = null;
   let venueLayout: Awaited<ReturnType<typeof getVenueLayout>> = { tables: [], seats: [] };
-  let eventSeats: Array<{ x: number; y: number; rotation: number; label: string | null }> = [];
+  let eventSeats: Array<{ x: number; y: number; rotation: number; label: string | null; seatNumber?: number }> = [];
 
   if (seatingMode === "open") {
     capacity = integer(body.capacity);
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         const values: unknown[] = [];
         const groups: string[] = [];
         eventSeats.forEach((seat, index) => {
-          values.push(created.id, seat.label ?? String(index + 1), index + 1, seat.x, seat.y, seat.rotation);
+          values.push(created.id, seat.label ?? String(index + 1), seat.seatNumber ?? index + 1, seat.x, seat.y, seat.rotation);
           const offset = values.length - 5;
           groups.push(`($${offset}, $${offset + 1}, $${offset + 2}, 'available', $${offset + 3}, $${offset + 4}, $${offset + 5})`);
         });

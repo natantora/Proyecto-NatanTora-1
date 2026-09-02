@@ -163,6 +163,9 @@ CREATE INDEX IF NOT EXISTS idx_event_seats_status ON event_seats(event_id, statu
 ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS x REAL;
 ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS y REAL;
 ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS rotation REAL NOT NULL DEFAULT 0;
+-- Los lugares retirados permanecen únicamente si existe historial asociado;
+-- nunca se muestran, cuentan en el cupo ni pueden volver a reservarse.
+ALTER TABLE event_seats ADD COLUMN IF NOT EXISTS retired BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Plano real y único del salón: mesas y paredes (decorativas, dan contexto
 -- visual) y sillas (los lugares reservables). Al crear un evento con

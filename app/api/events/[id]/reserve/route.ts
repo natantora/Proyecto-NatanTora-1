@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         const seatIds = [...new Set(requestedIds.filter((seatId): seatId is string => typeof seatId === "string" && seatId.length > 0))].slice(0, 20);
         if (!seatIds.length) throw new Error("SEAT_REQUIRED");
         const seatResult = await client.query<{ id: string; row_label: string; seat_number: number; status: string; x: number | null }>(
-          "SELECT id, row_label, seat_number, status, x FROM event_seats WHERE id = ANY($1::uuid[]) AND event_id = $2 ORDER BY id FOR UPDATE",
+          "SELECT id, row_label, seat_number, status, x FROM event_seats WHERE id = ANY($1::uuid[]) AND event_id = $2 AND retired = FALSE ORDER BY id FOR UPDATE",
           [seatIds, eventId],
         );
         if (seatResult.rows.length !== seatIds.length || seatResult.rows.some((seat) => seat.status !== "available")) throw new Error("SEAT_UNAVAILABLE");

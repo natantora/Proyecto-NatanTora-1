@@ -43,7 +43,7 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
                 ORDER BY CASE WHEN status = 'confirmed' THEN 0 ELSE 1 END, created_at DESC
                 LIMIT 1
               ) reservation ON TRUE
-        WHERE seat.event_id = $1
+        WHERE seat.event_id = $1 AND seat.retired = FALSE
         ORDER BY seat.row_label, seat.seat_number`,
       [id],
     ),

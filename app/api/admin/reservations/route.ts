@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       );
       if (!event.rows[0] || event.rows[0].seating_mode !== "assigned") throw new Error("INVALID_EVENT");
       const seats = await client.query<{ id: string; status: string }>(
-        "SELECT id, status FROM event_seats WHERE event_id = $1 AND id = ANY($2::uuid[]) ORDER BY id FOR UPDATE",
+        "SELECT id, status FROM event_seats WHERE event_id = $1 AND id = ANY($2::uuid[]) AND retired = FALSE ORDER BY id FOR UPDATE",
         [eventId, seatIds],
       );
       if (seats.rows.length !== seatIds.length || seats.rows.some((seat) => seat.status !== "available")) {

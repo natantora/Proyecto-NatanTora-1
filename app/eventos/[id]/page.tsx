@@ -20,7 +20,7 @@ export default async function EventDetailPage({ params, searchParams }: { params
   if (!event || !user || (!event.published && !(user.status === "approved" && canEditEvents(user.role as Role)))) notFound();
   await expireStaleEventReservations(id);
   const [seatsResult, reservationResult, pendingPaymentResult, countResult, venueLayout] = await Promise.all([
-    event.seating_mode === "assigned" ? query<{ id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number }>("SELECT id, row_label, seat_number, status, x, y, rotation FROM event_seats WHERE event_id = $1 ORDER BY row_label, seat_number", [id]) : Promise.resolve({ rows: [] }),
+    event.seating_mode === "assigned" ? query<{ id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number }>("SELECT id, row_label, seat_number, status, x, y, rotation FROM event_seats WHERE event_id = $1 AND retired = FALSE ORDER BY row_label, seat_number", [id]) : Promise.resolve({ rows: [] }),
     query<{ id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null }>(`SELECT r.id, r.seat_id, s.row_label, s.seat_number, s.x FROM event_reservations r LEFT JOIN event_seats s ON s.id = r.seat_id WHERE r.event_id = $1 AND r.user_id = $2 AND r.status = 'confirmed' ORDER BY s.row_label, s.seat_number`, [id, user.id]),
     query<PendingPayment>(
       `SELECT payment.id, MAX(reservation.expires_at) AS expires_at,
@@ -36,7 +36,10 @@ export default async function EventDetailPage({ params, searchParams }: { params
         LIMIT 1`,
       [id, user.id],
     ),
-    query<{ count: string }>("SELECT COUNT(*)::text AS count FROM event_reservations WHERE event_id = $1 AND (status = 'confirmed' OR (status = 'pending' AND expires_at > NOW()))", [id]),
+    query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM event_reservations reservation
+      LEFT JOIN event_seats seat ON seat.id = reservation.seat_id
+      WHERE reservation.event_id = $1 AND (reservation.seat_id IS NULL OR seat.retired = FALSE)
+        AND (reservation.status = 'confirmed' OR (reservation.status = 'pending' AND reservation.expires_at > NOW()))`, [id]),
     event.seating_mode === "assigned" ? getEventVenueTables(id) : Promise.resolve([]),
   ]);
   return <main className="min-h-screen bg-cream">

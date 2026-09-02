@@ -19,8 +19,8 @@ try {
   try {
     await client.query("DELETE FROM architectural_plan_seats");
     const architecturalValues = [];
-    const architecturalGroups = ARCHITECTURAL_SEATS.map((seat, index) => {
-      architecturalValues.push(index + 1, seat.x, seat.y, seat.rotation, seat.label);
+    const architecturalGroups = ARCHITECTURAL_SEATS.map((seat) => {
+      architecturalValues.push(seat.seatNumber, seat.x, seat.y, seat.rotation, seat.label);
       const offset = architecturalValues.length - 4;
       return `($${offset}, $${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
     });
@@ -42,7 +42,7 @@ try {
         WHERE seat.event_id = event.id
           AND event.seating_mode = 'assigned'
           AND event.seat_plan_type = 'architectural'
-          AND seat.seat_number = original.seat_number`,
+          AND seat.row_label = original.label`,
     );
     await client.query(
       `INSERT INTO event_seats (event_id, row_label, seat_number, status, x, y, rotation)
@@ -54,8 +54,22 @@ try {
           AND NOT EXISTS (
             SELECT 1 FROM event_seats seat
              WHERE seat.event_id = event.id
-               AND seat.seat_number = original.seat_number
+               AND seat.row_label = original.label
           )`,
+    );
+    await client.query(
+      `UPDATE event_seats seat
+          SET retired = TRUE,
+              status = CASE WHEN EXISTS (
+                SELECT 1 FROM event_reservations reservation
+                 WHERE reservation.seat_id = seat.id
+                   AND reservation.status IN ('pending', 'confirmed')
+              ) THEN 'occupied' ELSE seat.status END
+        USING events event
+        WHERE seat.event_id = event.id
+          AND event.seating_mode = 'assigned'
+          AND event.seat_plan_type = 'architectural'
+          AND seat.row_label = 'C08'`,
     );
     await client.query(
       `DELETE FROM event_seats seat
@@ -63,11 +77,10 @@ try {
         WHERE seat.event_id = event.id
           AND event.seating_mode = 'assigned'
           AND event.seat_plan_type = 'architectural'
-          AND seat.seat_number > $1
+          AND seat.row_label = 'C08'
           AND NOT EXISTS (
             SELECT 1 FROM event_reservations reservation WHERE reservation.seat_id = seat.id
           )`,
-      [ARCHITECTURAL_SEATS.length],
     );
     await client.query(
       `UPDATE events event
@@ -75,6 +88,7 @@ try {
          FROM (
            SELECT event_id, COUNT(*)::int AS total
              FROM event_seats
+            WHERE retired = FALSE
             GROUP BY event_id
          ) counts
         WHERE event.id = counts.event_id
