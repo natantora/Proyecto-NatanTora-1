@@ -12,6 +12,14 @@ export default async function Home() {
       <section className="relative bg-navy-deep text-cream overflow-hidden">
         <div
           aria-hidden="true"
+          className="home-hero-photo absolute inset-0 pointer-events-none"
+        />
+        <div
+          aria-hidden="true"
+          className="home-hero-overlay absolute inset-0 pointer-events-none"
+        />
+        <div
+          aria-hidden="true"
           className="absolute inset-0 opacity-[0.08] pointer-events-none"
           style={{
             backgroundImage:
