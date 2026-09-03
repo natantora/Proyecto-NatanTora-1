@@ -45,8 +45,16 @@ export default async function Home() {
               Un lugar diseñado para ti.
             </p>
 
-            <div className="mt-10 lg:mt-12 flex flex-col sm:flex-row gap-4">
-              <Link href={isLoggedIn ? "/clases" : "/auth/registro"} className="btn btn-primary text-center">
+            <div className="mt-10 lg:mt-12 flex flex-col sm:flex-row sm:flex-wrap gap-4">
+              {isLoggedIn && (
+                <Link href="/eventos" className="btn btn-primary text-center">
+                  Reserva tu lugar
+                </Link>
+              )}
+              <Link
+                href={isLoggedIn ? "/clases" : "/auth/registro"}
+                className={`btn text-center ${isLoggedIn ? "btn-ghost" : "btn-primary"}`}
+              >
                 {isLoggedIn ? "Explorar clases" : "Únete al Midrash"}
               </Link>
               <Link href="/quienes-somos" className="btn btn-ghost text-center">
