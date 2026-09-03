@@ -32,62 +32,26 @@ export default async function Home() {
           className="absolute inset-0 texture-paper opacity-40 mix-blend-overlay pointer-events-none"
         />
 
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-12 pt-24 lg:pt-32 pb-20 lg:pb-28">
-          <div className="flex items-center justify-between mb-16 lg:mb-24 fade-in">
-            <div className="eyebrow eyebrow-line text-gold-light">
-              Plaza Polanco · Ciudad de México
-            </div>
-            <div className="hidden md:block text-[10px] tracking-[0.3em] uppercase text-cream/40 font-semibold">
-              Est. 5786
-            </div>
-          </div>
+        <div className="relative max-w-7xl mx-auto min-h-[760px] lg:min-h-[860px] px-6 lg:px-12 py-20 lg:py-28 flex items-end lg:items-center">
+          <div className="max-w-3xl fade-in pb-6 lg:pb-0">
+            <div className="w-16 h-px bg-gold-light mb-7 lg:mb-9" />
+            <h1 className="font-serif text-[52px] sm:text-[66px] lg:text-[88px] leading-[0.95] tracking-[-0.035em] text-cream font-normal">
+              Midrash Natán Torá
+            </h1>
+            <p className="mt-6 lg:mt-8 font-serif italic text-[34px] sm:text-[42px] lg:text-[54px] leading-tight text-gold-light">
+              En el corazón de Polanco
+            </p>
+            <p className="mt-5 lg:mt-6 text-[15px] sm:text-[17px] lg:text-[19px] tracking-[0.16em] uppercase text-cream/85 font-medium">
+              Un lugar diseñado para ti.
+            </p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-end">
-            <div className="lg:col-span-9 fade-in">
-              <h1 className="serif-hero text-cream">
-                Casa de estudio,
-                <br />
-                de oración
-                <br />
-                <em className="accent-light">y de comunidad.</em>
-              </h1>
-            </div>
-
-            <div className="lg:col-span-3 lg:pb-4 fade-in">
-              <div className="hairline mb-5" />
-              <p className="text-[14px] leading-[1.65] text-cream/70 font-normal">
-                Centro espiritual sefardí en el corazón de Polanco. Clases
-                diarias de Torá, rezos y vida comunitaria bajo el minhag Halabi
-                de Aram Tzobá.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-14 lg:mt-20 flex flex-wrap gap-4 fade-in">
-            <Link href={isLoggedIn ? "/clases" : "/auth/registro"} className="btn btn-primary">
-              {isLoggedIn ? "Explorar clases" : "Únete al Midrash"}
-            </Link>
-            <Link href="/quienes-somos" className="btn btn-ghost">
-              Conoce el Midrash
-            </Link>
-          </div>
-
-          <div className="mt-20 lg:mt-28 pt-10 border-t border-navy-soft/60 grid grid-cols-2 lg:grid-cols-4 gap-8 text-[11px] tracking-[0.18em] uppercase text-cream/55 font-semibold">
-            <div>
-              <div className="text-cream/35 mb-1.5">Tradición</div>
-              <div>Minhag Halabi</div>
-            </div>
-            <div>
-              <div className="text-cream/35 mb-1.5">Referencia</div>
-              <div>Shulján HaMélej</div>
-            </div>
-            <div>
-              <div className="text-cream/35 mb-1.5">Origen</div>
-              <div>Aram Tzobá</div>
-            </div>
-            <div>
-              <div className="text-cream/35 mb-1.5">Hogar</div>
-              <div>Polanco · CDMX</div>
+            <div className="mt-10 lg:mt-12 flex flex-col sm:flex-row gap-4">
+              <Link href={isLoggedIn ? "/clases" : "/auth/registro"} className="btn btn-primary text-center">
+                {isLoggedIn ? "Explorar clases" : "Únete al Midrash"}
+              </Link>
+              <Link href="/quienes-somos" className="btn btn-ghost text-center">
+                Conoce el Midrash
+              </Link>
             </div>
           </div>
         </div>
