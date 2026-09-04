@@ -97,6 +97,89 @@ CREATE INDEX IF NOT EXISTS idx_classes_owner ON classes(owner_id);
 
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
 
+-- Catálogo público de Zury Marcos en TuTorahtv. Esta carga es idempotente:
+-- compara el identificador de YouTube para conservar cualquier clase ya creada.
+INSERT INTO classes (
+  title, category, media_type, media_url, rabbi, duration_minutes, published, published_at
+)
+SELECT
+  imported.title,
+  imported.category,
+  'video',
+  imported.media_url,
+  'Zury Marcos',
+  imported.duration_minutes,
+  TRUE,
+  NOW()
+FROM (VALUES
+  ('Shofetim 2026- ándele mi poli 5786', 'Parashá', 'https://www.youtube.com/watch?v=tCPcXO5h4kU', 7),
+  ('Bola de nieve de Mitzvot', 'General', 'https://www.youtube.com/watch?v=w11hkC-mv5Q', 17),
+  ('Purim 5786 - solo Hashem y nada mas', 'Parashá', 'https://www.youtube.com/watch?v=t-8HWT6gH3I', 16),
+  ('Yitro - la clave es tora 5786', 'Parashá', 'https://www.youtube.com/watch?v=NdHpQlQqfx4', 34),
+  ('Encuéntrale el visto bueno', 'General', 'https://www.youtube.com/watch?v=AaWRjQJB4c0', 14),
+  ('El Baseball y la vida', 'General', 'https://www.youtube.com/watch?v=zcip3JZeCDs', 21),
+  ('Parashat Ki tisa - ¿Se puede ver a H’ a la cara?', 'Parashá', 'https://www.youtube.com/watch?v=dN0kZ-AGfeA', 13),
+  ('Shelah leja - cuánto impacta una palabra', 'Parashá', 'https://www.youtube.com/watch?v=jbXUOJdzfaw', 9),
+  ('Perashat Teruma - Tetsaveh - No lo veas por el retrovisor', 'Parashá', 'https://www.youtube.com/watch?v=CGEj3bmq_Q8', 11),
+  ('Pesaj - el teléfono de las 4 copas', 'Parashá', 'https://www.youtube.com/watch?v=CNDA0XIdhqA', 38),
+  ('Ajare mot - kedoshim 5786 Omer y el sentir del otro', 'Parashá', 'https://www.youtube.com/watch?v=RlZCqHvBwoM', 34),
+  ('Teruma y el caballo de los 5 millones', 'Parashá', 'https://www.youtube.com/watch?v=G4D0X5NNFCs', 8),
+  ('Por lo que vale la pena abrir el mar', 'General', 'https://www.youtube.com/watch?v=Ya6reFG9Nbo', 15),
+  ('Parashat Shelah - Miriam - los espías y la tierra de Israel', 'Parashá', 'https://www.youtube.com/watch?v=7QOYMsJUfrA', 39),
+  ('Perashá Terumá - Siempre hay algo que darle a Hashem', 'Parashá', 'https://www.youtube.com/watch?v=rdwi5odWC-o', 12),
+  ('¿Cómo saber si lo que hacemos está bien?', 'General', 'https://www.youtube.com/watch?v=6gGdrkO2aUo', 14),
+  ('Pesaj 2025 - es un chiste??', 'Parashá', 'https://www.youtube.com/watch?v=de_osIcSlPM', 28),
+  ('Parashat Pekude - Cuentas claras', 'Parashá', 'https://www.youtube.com/watch?v=zgb4aCg6MdA', 10),
+  ('Para que equipo juegas ?', 'General', 'https://www.youtube.com/watch?v=kOKQhVpoNIk', 10),
+  ('Los golpes son para bien', 'General', 'https://www.youtube.com/watch?v=bSeL_8Cd5ho', 14),
+  ('Parashat Shemot - ¿Un líder tartamudo?', 'Parashá', 'https://www.youtube.com/watch?v=3UFxGfZbMU4', 9),
+  ('Pies firmes en el mar', 'General', 'https://www.youtube.com/watch?v=oK-LQbLPeNg', 15),
+  ('Behaaloteja - la comparación, el ladrón de la felicidad', 'Parashá', 'https://www.youtube.com/watch?v=EskFwK8gSWA', 34),
+  ('Teruma 5786 el gran souvenir', 'Parashá', 'https://www.youtube.com/watch?v=Bmd-KiFzcRE', 34),
+  ('Pesaj - el minuto que hizo la diferencia', 'Parashá', 'https://www.youtube.com/watch?v=6cXQmRteNcM', 6),
+  ('Parashat Nasó - Nazir pecador o Nazir kadosh', 'Parashá', 'https://www.youtube.com/watch?v=ADyHsBnweRA', 10),
+  ('Lo que le podemos entregar a Hashem', 'General', 'https://www.youtube.com/watch?v=zE8kxV4_YVs', 15),
+  ('Parashat Koraj 2024', 'Parashá', 'https://www.youtube.com/watch?v=AsJ1ErEsR9Q', 10),
+  ('Levántate del polvo', 'General', 'https://www.youtube.com/watch?v=8QWddwbsn18', 15),
+  ('Beshalah - de verdad quieres salir de Misraim?', 'General', 'https://www.youtube.com/watch?v=dNDhO9SBQJc', 34),
+  ('¿Puede ser divertida la religión?', 'General', 'https://www.youtube.com/watch?v=b2drVbxnBvE', 18),
+  ('Matzah!… Ma hu omer!!', 'General', 'https://www.youtube.com/watch?v=fhUEkil4C4c', 8),
+  ('Parashat Behar - No te engañes a ti mismo', 'Parashá', 'https://www.youtube.com/watch?v=Am8Jgwxl7L4', 13),
+  ('Tetzave - Purim - el que viste de seda …de seda se queda!', 'Parashá', 'https://www.youtube.com/watch?v=amIRZ3UlWfQ', 30),
+  ('Teruma - Naase venishma en el mishcan?? En nuestras misvot? 5786', 'Parashá', 'https://www.youtube.com/watch?v=DZph3eqj4uY', 10),
+  ('Que no te roben lo bueno', 'General', 'https://www.youtube.com/watch?v=uW5I2kBOXV8', 10),
+  ('La verdadera manera de embellecer las Mitzvot', 'General', 'https://www.youtube.com/watch?v=AHQAadLwhqQ', 9),
+  ('Parashat Ki tisa - ¿Sabes por qué no eres Cohen?', 'Parashá', 'https://www.youtube.com/watch?v=wlhR6PwPzII', 6),
+  ('Parashá Vaishlaj', 'Parashá', 'https://www.youtube.com/watch?v=JgHELqJ_Kkk', 17),
+  ('Parashat Beshalaj - La prueba del Man', 'Parashá', 'https://www.youtube.com/watch?v=IuM3qn8T1bc', 8),
+  ('Perashat Bo - Lo difícil de la oscuridad', 'Parashá', 'https://www.youtube.com/watch?v=jLi5nufRpgE', 8),
+  ('Parashat Mishpatim ...Y estas tambien 5786', 'Parashá', 'https://www.youtube.com/watch?v=PbtMhAXW2Tk', 36),
+  ('Libro de Vayikra - ¿Se van a burlar de ti?', 'General', 'https://www.youtube.com/watch?v=7N9RIaISRoM', 9),
+  ('¿Nos pesa Elul?', 'General', 'https://www.youtube.com/watch?v=JYhqXx2NHLI', 12),
+  ('Parashat Balak - El obstáculo (mensaje) del burro', 'Parashá', 'https://www.youtube.com/watch?v=svIR8kVg3Xw', 9),
+  ('Tazria Tahor - 2026 Cambia tu Ayin y no caerás', 'General', 'https://www.youtube.com/watch?v=HTntdsyHLIU', 34),
+  ('Perashat Teruma - build a bear hamikdash 5785', 'Parashá', 'https://www.youtube.com/watch?v=HuN0StA7HY0', 25),
+  ('Parashat Vayakhel - Para - el calendario adentro del refri 2025', 'Parashá', 'https://www.youtube.com/watch?v=7113hL7gl-A', 39),
+  ('Parashat Vaera - Un líder, sufre con su pueblo', 'Parashá', 'https://www.youtube.com/watch?v=QyBKgWFUy98', 9),
+  ('¿Bola de home run o cerveza? - Lej Leja', 'General', 'https://www.youtube.com/watch?v=AFWKHjj1IFs', 8),
+  ('Purim - Ayuno en la montaña rusa', 'Parashá', 'https://www.youtube.com/watch?v=uTzfdbsHVMI', 12),
+  ('Parashat Ki tisa - La mitad de la película', 'Parashá', 'https://www.youtube.com/watch?v=wLcJATMTujM', 10),
+  ('Parashat Vayetzé - ¿Cuál es la especialidad del Tzadik?', 'Parashá', 'https://www.youtube.com/watch?v=anISomstg_E', 9),
+  ('Perashat tazria - Tahor 5786 La causa de la bajada a mitzraim', 'Parashá', 'https://www.youtube.com/watch?v=NresUrzvqRE', 34),
+  ('Parashat Behukotay - Aún en la dificultad, algo vales', 'Parashá', 'https://www.youtube.com/watch?v=LzDJT0XD6OQ', 9),
+  ('Parashat Behaalotejá - ¡Increíble que Aharon no cambió!', 'Parashá', 'https://www.youtube.com/watch?v=lw9qHX0LJCs', 10),
+  ('No digas yo enriquecí a Abraham - Lej Leja', 'General', 'https://www.youtube.com/watch?v=O9O5X_eF_78', 12),
+  ('Parashat Balak - El burro que habló o el que habló es burro', 'Parashá', 'https://www.youtube.com/watch?v=iAmcjQ7hUco', 5),
+  ('Parashat Balak - No andes viendo la casa de otros ¿o sí?', 'Parashá', 'https://www.youtube.com/watch?v=ouBeD-n5MV4', 6),
+  ('Parashat Teruma - que tienes en tu kodesh hakodashim ?', 'Parashá', 'https://www.youtube.com/watch?v=jOtBMA_-8uY', 9),
+  ('Parashat Pekude - Moshe robó?', 'Parashá', 'https://www.youtube.com/watch?v=9L4gGcUkNEI', 10)
+) AS imported(title, category, media_url, duration_minutes)
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM classes existing
+  WHERE existing.media_url LIKE '%' || split_part(imported.media_url, 'v=', 2) || '%'
+);
+
 CREATE TABLE IF NOT EXISTS events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
