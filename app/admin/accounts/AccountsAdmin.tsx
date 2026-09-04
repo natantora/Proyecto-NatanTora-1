@@ -133,7 +133,7 @@ export default function AccountsAdmin({ accounts, profiles }: {
 
       {(message || error) && <div className={`border px-4 py-3 text-[13px] ${error ? "border-red-200 bg-red-50 text-red-800" : "border-green-200 bg-green-50 text-green-800"}`}>{error || message}</div>}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Metric label="Saldo pendiente" value={mxn(totalBalance)} />
         <Metric label="Total pagado" value={mxn(totalPaid)} />
         <Metric label="Cuentas activas" value={String(accountRows.length)} />
@@ -217,7 +217,7 @@ export default function AccountsAdmin({ accounts, profiles }: {
   );
 }
 
-function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) { return <div className={`border p-4 text-center ${warn ? "border-amber-300 bg-amber-50" : "border-line bg-cream-light"}`}><div className="serif-display text-[26px] text-navy">{value}</div><div className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-muted">{label}</div></div>; }
+function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) { return <div className={`min-w-0 border px-4 py-5 text-center ${warn ? "border-amber-300 bg-amber-50" : "border-line bg-cream-light"}`}><div className="serif-display whitespace-nowrap text-[24px] leading-none text-navy sm:text-[28px]">{value}</div><div className="mt-2 text-[10px] font-bold uppercase tracking-[0.18em] text-ink-muted">{label}</div></div>; }
 function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) { return <button type="button" onClick={onClick} className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors ${active ? "border-navy bg-navy text-cream" : "border-line bg-white text-ink-soft hover:border-gold hover:text-navy"}`}>{children}</button>; }
 function ActionForm({ title, onSubmit, children }: { title: string; onSubmit: (event: FormEvent<HTMLFormElement>) => void; children: React.ReactNode }) { return <form onSubmit={onSubmit} className="space-y-3 border border-line bg-cream-light p-5"><h2 className="serif-display text-[24px] text-navy">{title}</h2>{children}</form>; }
 function AccountSelect({ accounts }: { accounts: BillingAccountRow[] }) { return <select className={inputClass} name="account_id" required defaultValue=""><option value="" disabled>Selecciona una cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.display_name} · {mxn(account.open_balance)}</option>)}</select>; }
