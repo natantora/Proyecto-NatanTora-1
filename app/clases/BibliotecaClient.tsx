@@ -83,6 +83,52 @@ function externalPlatformName(url: string): string {
   return 'otra pestaña'
 }
 
+function VideoPlayer({ url, title }: { url: string; title: string }) {
+  if (isStorageUrl(url)) {
+    return (
+      <video controls autoPlay preload="metadata" src={url} className="aspect-video w-full bg-black object-contain" playsInline>
+        Tu navegador no soporta video.{' '}
+        <a href={url} className="text-gold">Descargar</a>
+      </video>
+    )
+  }
+
+  const embed = toEmbedUrl(url)
+  const platform = externalPlatformName(url)
+  if (embed) {
+    return (
+      <>
+        <div className="relative aspect-video w-full overflow-hidden bg-black">
+          <iframe
+            src={`${embed}${embed.includes('?') ? '&' : '?'}autoplay=1`}
+            className="absolute inset-0 h-full w-full border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            title={title}
+          />
+        </div>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 block text-[12px] text-ink-soft transition-colors hover:text-gold"
+        >
+          ¿No carga? Ver en {platform} ↗
+        </a>
+      </>
+    )
+  }
+
+  return (
+    <div className="border border-line bg-cream-dark p-4 text-[13px] text-ink-soft">
+      No se puede reproducir aquí.{' '}
+      <a href={url} target="_blank" rel="noopener noreferrer" className="font-bold text-gold hover:underline">
+        Ver en {platform} →
+      </a>
+    </div>
+  )
+}
+
 export default function BibliotecaClient({ classes, error, isLoggedIn }: { classes: ClassRow[]; error: string | null; isLoggedIn: boolean }) {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'video' | 'audio' | 'text'>('all')
@@ -232,7 +278,11 @@ export default function BibliotecaClient({ classes, error, isLoggedIn }: { class
               const thumbnail = c.thumbnail_url || youtubeThumbnailUrl(c.media_url || '')
               return (
                 <article key={c.id} className="bg-cream-light p-7 lg:p-8 hover:bg-white transition-colors flex flex-col">
-                  {thumbnail && (
+                  {isPlaying && c.media_url && type === 'video' ? (
+                    <div className="mb-5">
+                      <VideoPlayer url={c.media_url} title={c.title} />
+                    </div>
+                  ) : thumbnail && (
                     <button
                       type="button"
                       onClick={() => c.media_url && setPlayingId(isPlaying ? null : c.id)}
@@ -365,61 +415,6 @@ export default function BibliotecaClient({ classes, error, isLoggedIn }: { class
                     </div>
                   )}
 
-                  {isPlaying && c.media_url && type === 'video' && (
-                    <div className="mt-4 pt-4 border-t border-line/60">
-                      {(() => {
-                        // 1. Archivo subido a Storage: video nativo HTML5
-                        if (isStorageUrl(c.media_url!)) {
-                          return (
-                            <video controls preload="metadata" src={c.media_url!} className="w-full bg-black" playsInline>
-                              Tu navegador no soporta video.{' '}
-                              <a href={c.media_url!} className="text-gold">Descargar</a>
-                            </video>
-                          )
-                        }
-                        // 2. YouTube/Vimeo: iframe + fallback
-                        const embed = toEmbedUrl(c.media_url!)
-                        const platform = externalPlatformName(c.media_url!)
-                        if (embed) {
-                          return (
-                            <>
-                              <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                                <iframe
-                                  src={embed}
-                                  className="absolute inset-0 w-full h-full border-0"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                  allowFullScreen
-                                  title={c.title}
-                                />
-                              </div>
-                              <a
-                                href={c.media_url!}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block mt-3 text-[12px] text-ink-soft hover:text-gold transition-colors"
-                              >
-                                ¿No carga? Ver en {platform} ↗
-                              </a>
-                            </>
-                          )
-                        }
-                        // 3. URL externa arbitraria
-                        return (
-                          <div className="text-[13px] text-ink-soft">
-                            No se puede reproducir aquí.{' '}
-                            <a
-                              href={c.media_url!}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-gold font-bold hover:underline"
-                            >
-                              Ver en {platform} →
-                            </a>
-                          </div>
-                        )
-                      })()}
-                    </div>
-                  )}
                 </article>
               )
             })}
