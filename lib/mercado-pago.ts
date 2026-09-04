@@ -91,16 +91,24 @@ export function getMercadoPagoPayment(id: string): Promise<MercadoPagoPayment> {
 export function verifyMercadoPagoSignature(params: {
   signature: string | null;
   requestId: string | null;
-  dataId: string;
+  dataId: string | null;
 }): boolean {
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim();
-  if (!secret || !params.signature || !params.requestId || !params.dataId) return false;
+  if (!secret || !params.signature) return false;
   const parts = Object.fromEntries(params.signature.split(",").map((part) => {
     const [key, ...rest] = part.trim().split("=");
     return [key, rest.join("=")];
   }));
   if (!parts.ts || !parts.v1) return false;
-  const manifest = `id:${params.dataId};request-id:${params.requestId};ts:${parts.ts};`;
+
+  // Mercado Pago signs only the values that are present in the incoming URL
+  // and headers. A data ID found only in the JSON body must not be added to
+  // the manifest, otherwise legitimate notifications fail validation.
+  const manifest = [
+    params.dataId ? `id:${params.dataId.toLowerCase()};` : "",
+    params.requestId ? `request-id:${params.requestId};` : "",
+    `ts:${parts.ts};`,
+  ].join("");
   const expected = createHmac("sha256", secret).update(manifest).digest("hex");
   const received = parts.v1.toLowerCase();
   if (expected.length !== received.length) return false;

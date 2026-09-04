@@ -5,8 +5,13 @@ import { reportSystemAlert } from "@/lib/system-alerts";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const dataId = String(req.nextUrl.searchParams.get("data.id") || body?.data?.id || "");
-  if (!verifyMercadoPagoSignature({ signature: req.headers.get("x-signature"), requestId: req.headers.get("x-request-id"), dataId })) {
+  const signedDataId = req.nextUrl.searchParams.get("data.id");
+  const dataId = String(signedDataId || body?.data?.id || "");
+  if (!verifyMercadoPagoSignature({
+    signature: req.headers.get("x-signature"),
+    requestId: req.headers.get("x-request-id"),
+    dataId: signedDataId,
+  })) {
     await reportSystemAlert({ severity: "warning", category: "webhook", title: "Notificación de Mercado Pago rechazada", message: "Llegó una notificación con firma inválida. No se modificó ningún pago.", fingerprint: "webhook:mercadopago:invalid-signature", context: { data_id: dataId || null } });
     return NextResponse.json({ error: "Firma inválida" }, { status: 401 });
   }
