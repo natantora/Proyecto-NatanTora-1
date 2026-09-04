@@ -65,7 +65,10 @@ export async function createMercadoPagoPreference(params: {
         failure: `${base}?payment=cancelled&internal_payment_id=${internal}`,
       },
       auto_return: "approved",
-      notification_url: `${origin}/api/webhooks/mercadopago`,
+      // Without source_news=webhooks Mercado Pago may deliver legacy IPN
+      // notifications, whose x-signature cannot be verified with the Webhook
+      // secret. Force the signed Webhooks channel for every new preference.
+      notification_url: `${origin}/api/webhooks/mercadopago?source_news=webhooks`,
       expires: true,
       expiration_date_from: new Date().toISOString(),
       expiration_date_to: new Date(Date.now() + (params.expirationMinutes ?? 30) * 60 * 1000).toISOString(),
