@@ -12,15 +12,26 @@ type ClassRow = {
   media_url: string | null
   rabbi: string | null
   duration_minutes: number | null
-  published_at: string | null
-  created_at: string
+  published_at: string | Date | null
+  created_at: string | Date
 }
 
 const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
-function formatDate(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
+function toDate(value: string | Date): Date {
+  return value instanceof Date ? value : new Date(value)
+}
+
+function dateValue(value: string | Date | null): number {
+  if (!value) return 0
+  const time = toDate(value).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+function formatDate(value: string | Date | null): string {
+  if (!value) return ''
+  const d = toDate(value)
+  if (!Number.isFinite(d.getTime())) return ''
   return `${d.getUTCDate()} ${MESES_ES[d.getUTCMonth()].slice(0, 3)}. ${d.getUTCFullYear()}`
 }
 
@@ -99,15 +110,15 @@ export default function BibliotecaClient({ classes, error, isLoggedIn }: { class
     const sorted = [...result]
     if (sortBy === 'recent') {
       sorted.sort((a, b) => {
-        const da = a.published_at ?? a.created_at
-        const db = b.published_at ?? b.created_at
-        return db.localeCompare(da)
+        const da = dateValue(a.published_at ?? a.created_at)
+        const db = dateValue(b.published_at ?? b.created_at)
+        return db - da
       })
     } else if (sortBy === 'oldest') {
       sorted.sort((a, b) => {
-        const da = a.published_at ?? a.created_at
-        const db = b.published_at ?? b.created_at
-        return da.localeCompare(db)
+        const da = dateValue(a.published_at ?? a.created_at)
+        const db = dateValue(b.published_at ?? b.created_at)
+        return da - db
       })
     } else {
       sorted.sort((a, b) => a.title.localeCompare(b.title))
