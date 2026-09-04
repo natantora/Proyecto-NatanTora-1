@@ -11,8 +11,25 @@ const TABLES = new Set([
 ]);
 
 type Filter = { column: string; op: "=" | "IS" | ">=" | "IN"; value: unknown };
-type Order = { column: string; ascending: boolean };
+type Order = { column: string; ascending: boolean; nullsFirst?: boolean };
 type Result = { data: any; error: any; count?: number | null };
+
+/**
+ * PostgreSQL entrega timestamp/timestamptz como objetos Date, mientras que la
+ * interfaz que reemplazamos (PostgREST/Supabase) los entregaba como texto ISO.
+ * Normalizar aquí mantiene un solo contrato para todas las páginas y evita que
+ * un componente trate accidentalmente un Date como si fuera string.
+ */
+function serializeDatabaseValue(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(serializeDatabaseValue);
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [key, serializeDatabaseValue(nested)]),
+    );
+  }
+  return value;
+}
 
 function ident(value: string): string {
   if (!/^[a-z_][a-z0-9_]*$/i.test(value)) throw new Error("Identificador SQL invalido");
@@ -54,7 +71,12 @@ class QueryBuilder implements PromiseLike<Result> {
   is(column: string, value: unknown) { this.filters.push({ column, op: "IS", value }); return this; }
   in(column: string, value: unknown[]) { this.filters.push({ column, op: "IN", value }); return this; }
   order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }) {
-    this.orders.push({ column, ascending: options?.ascending !== false }); return this;
+    this.orders.push({
+      column,
+      ascending: options?.ascending !== false,
+      nullsFirst: options?.nullsFirst,
+    });
+    return this;
   }
   limit(value: number) { this.maxRows = value; return this; }
   single() { this.one = "single"; return this.execute(); }
@@ -106,7 +128,10 @@ class QueryBuilder implements PromiseLike<Result> {
       if (this.operation === "select") {
         sql = `SELECT ${columns(this.selected)} FROM ${table}${this.where(values)}`;
         if (this.orders.length) {
-          sql += " ORDER BY " + this.orders.map((o) => `${ident(o.column)} ${o.ascending ? "ASC" : "DESC"}`).join(", ");
+          sql += " ORDER BY " + this.orders.map((o) => {
+            const nulls = o.nullsFirst === undefined ? "" : ` NULLS ${o.nullsFirst ? "FIRST" : "LAST"}`;
+            return `${ident(o.column)} ${o.ascending ? "ASC" : "DESC"}${nulls}`;
+          }).join(", ");
         }
         if (this.maxRows !== null) { values.push(this.maxRows); sql += ` LIMIT $${values.length}`; }
       } else if (this.operation === "insert" || this.operation === "upsert") {
@@ -131,9 +156,10 @@ class QueryBuilder implements PromiseLike<Result> {
       }
 
       const result = await query(sql, values);
-      let data: any = result.rows;
+      const serializedRows = result.rows.map(serializeDatabaseValue);
+      let data: any = serializedRows;
       if (this.head) data = null;
-      else if (this.one) data = result.rows[0] ?? null;
+      else if (this.one) data = serializedRows[0] ?? null;
 
       let count: number | null | undefined;
       if (this.countMode) {
