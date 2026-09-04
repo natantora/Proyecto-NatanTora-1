@@ -10,6 +10,16 @@ type PreviewRow = {
   due_date: string | null; notes: string; account_id: string; match_label: string | null;
 };
 
+type LegacyPreview = {
+  filename: string;
+  existingAccounts: number;
+  warnings: string[];
+  summary: {
+    accounts: number; charges: number; payments: number; paidCharges: number; openCharges: number;
+    chargeTotal: number; paymentTotal: number; openBalance: number; skippedCharges: number; skippedPayments: number;
+  };
+};
+
 const inputClass = "w-full border border-line bg-white px-3 py-2.5 text-[13px] text-ink outline-none focus:border-gold";
 const buttonClass = "bg-navy px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-cream hover:bg-navy-deep disabled:opacity-50";
 
@@ -25,6 +35,8 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ filename: string; rows: PreviewRow[]; errors: string[] } | null>(null);
+  const [legacyPreview, setLegacyPreview] = useState<LegacyPreview | null>(null);
+  const [legacyFile, setLegacyFile] = useState<File | null>(null);
   const [query, setQuery] = useState("");
   const [accountRows, setAccountRows] = useState(accounts);
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
@@ -122,6 +134,30 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
     } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
   }
 
+  async function previewLegacyExcel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const file = new FormData(event.currentTarget).get("file");
+    if (!(file instanceof File)) return;
+    const data = new FormData(); data.set("file", file);
+    try {
+      const result = await api("/api/admin/billing/import/legacy/preview", { method: "POST", body: data });
+      setLegacyFile(file); setLegacyPreview(result);
+      setMessage(`Archivo validado: ${result.summary.accounts} clientes y ${result.summary.charges} cargos`);
+    } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
+  }
+
+  async function importLegacyExcel() {
+    if (!legacyFile || !legacyPreview) return;
+    if (!window.confirm(`Se eliminarán las ${legacyPreview.existingAccounts} cuentas actuales y su historial de cobranza.\n\nDespués se importarán ${legacyPreview.summary.accounts} clientes del Excel. ¿Continuar?`)) return;
+    const data = new FormData();
+    data.set("file", legacyFile); data.set("replace_existing", "true"); data.set("confirmation", "REEMPLAZAR");
+    try {
+      const result = await api("/api/admin/billing/import/legacy", { method: "POST", body: data });
+      setMessage(`Listo: se eliminaron ${result.summary.removedAccounts} cuentas de prueba y se importaron ${result.summary.accounts} clientes, ${result.summary.charges} cargos y ${result.summary.payments} pagos.`);
+      setLegacyFile(null); setLegacyPreview(null); router.refresh();
+    } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -137,6 +173,31 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
         <Metric label="Cuentas activas" value={String(accountRows.length)} />
         <Metric label="Sin vincular" value={String(unlinked)} warn={unlinked > 0} />
       </div>
+
+      <section className="border border-line bg-cream-light p-5 sm:p-7">
+        <div className="eyebrow mb-2 text-gold">Archivo oficial</div>
+        <h2 className="serif-display text-[28px] text-navy">Cargar cobranza completa</h2>
+        <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-ink-soft">Para el archivo <strong>COBRANZA MNT.xlsx</strong>. Importa CLIENTES, CARGOS y PAGOS, conserva el historial y calcula lo pagado y pendiente de cada cargo.</p>
+        <form onSubmit={previewLegacyExcel} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="flex-1 text-[11px] font-bold uppercase tracking-[0.15em] text-ink-soft">Archivo .xlsx
+            <input name="file" type="file" accept=".xlsx,.xlsm" required className="mt-2 block w-full border border-line bg-white px-3 py-2 text-[12px]" onChange={() => { setLegacyPreview(null); setLegacyFile(null); }} />
+          </label>
+          <button disabled={busy} className={buttonClass}>Revisar cobranza</button>
+        </form>
+        {legacyPreview && <div className="mt-5 border border-line bg-white p-4 sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Metric label="Clientes" value={String(legacyPreview.summary.accounts)} />
+            <Metric label="Cargos" value={String(legacyPreview.summary.charges)} />
+            <Metric label="Pagos" value={String(legacyPreview.summary.payments)} />
+            <Metric label="Total cargado" value={mxn(legacyPreview.summary.chargeTotal)} />
+            <Metric label="Total pagado" value={mxn(legacyPreview.summary.paymentTotal)} />
+            <Metric label="Saldo pendiente" value={mxn(legacyPreview.summary.openBalance)} />
+          </div>
+          {legacyPreview.warnings.length > 0 && <div className="mt-4 border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-900">{legacyPreview.warnings.map((item) => <div key={item}>{item}</div>)}</div>}
+          <div className="mt-4 border border-red-200 bg-red-50 p-3 text-[12px] leading-relaxed text-red-800">Esta operación reemplazará las <strong>{legacyPreview.existingAccounts} cuentas actuales</strong> y su historial de cobranza. No elimina donativos ni pagos de eventos.</div>
+          <button type="button" disabled={busy} onClick={importLegacyExcel} className={`${buttonClass} mt-4`}>Reemplazar e importar</button>
+        </div>}
+      </section>
 
       <section className="border border-line bg-cream-light p-5 sm:p-7">
         <h2 className="serif-display text-[28px] text-navy">Importar Excel</h2>

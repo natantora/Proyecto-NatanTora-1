@@ -59,7 +59,7 @@ export default async function MyAccountPage({
               created_at::text, paid_at::text
          FROM payments
         WHERE billing_account_id = $1 AND status IN ('paid','refunded')
-        ORDER BY COALESCE(paid_at, created_at) DESC LIMIT 50`,
+        ORDER BY COALESCE(paid_at, created_at) DESC`,
       [account.id],
     ),
   ]);
