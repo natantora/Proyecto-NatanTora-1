@@ -11,11 +11,17 @@ const links = [
   { href: '/contacto', label: 'Contacto' },
 ];
 
+type NavbarUser = {
+  email?: string;
+  full_name?: string | null;
+  role?: string | null;
+};
+
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [user, setUser] = useState<NavbarUser | null>(null);
+  const [profile, setProfile] = useState<NavbarUser | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -29,10 +35,11 @@ export default function Navbar() {
   }, []);
 
   const handleLogout = async () => {
-    await fetch('/api/admin/logout', { method: 'POST' });
+    const response = await fetch('/api/admin/logout', { method: 'POST' });
+    if (!response.ok) return;
     setUser(null);
     setProfile(null);
-    window.location.href = '/';
+    window.location.replace('/');
   };
 
   return (

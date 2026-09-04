@@ -103,5 +103,12 @@ export async function destroySession(): Promise<void> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (token) await query("DELETE FROM sessions WHERE token_hash = $1", [hashToken(token)]);
-  jar.set(SESSION_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+  jar.set(SESSION_COOKIE, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: new Date(0),
+    maxAge: 0,
+  });
 }

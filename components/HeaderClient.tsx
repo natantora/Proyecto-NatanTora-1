@@ -3,7 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 const navLinks = [
   { href: "/", label: "Inicio" },
@@ -23,7 +22,6 @@ type Props = {
 };
 
 export default function HeaderClient({ isLoggedIn, approved, isAdmin, userName }: Props) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   const showNav = approved;
@@ -32,9 +30,9 @@ export default function HeaderClient({ isLoggedIn, approved, isAdmin, userName }
   const showPendiente = isLoggedIn && !approved;
 
   async function logout() {
-    await fetch("/api/admin/logout", { method: "POST" });
-    router.replace("/");
-    router.refresh();
+    const response = await fetch("/api/admin/logout", { method: "POST" });
+    if (!response.ok) return;
+    window.location.replace("/");
   }
 
   return (
