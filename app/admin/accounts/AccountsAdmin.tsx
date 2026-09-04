@@ -2,23 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import type { BillingAccountRow, ImportSummary, ProfileOption } from "./types";
-
-type PreviewRow = {
-  row_number: number; reference: string; account_reference: string; name: string;
-  email: string; phone: string; concept: string; period: string; amount: number;
-  due_date: string | null; notes: string; account_id: string; match_label: string | null;
-};
-
-type LegacyPreview = {
-  filename: string;
-  existingAccounts: number;
-  warnings: string[];
-  summary: {
-    accounts: number; charges: number; payments: number; paidCharges: number; openCharges: number;
-    chargeTotal: number; paymentTotal: number; openBalance: number; skippedCharges: number; skippedPayments: number;
-  };
-};
+import type { BillingAccountRow, ProfileOption } from "./types";
 
 const inputClass = "w-full border border-line bg-white px-3 py-2.5 text-[13px] text-ink outline-none focus:border-gold";
 const buttonClass = "bg-navy px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-cream hover:bg-navy-deep disabled:opacity-50";
@@ -27,17 +11,17 @@ function mxn(value: number) {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
 }
 
-export default function AccountsAdmin({ accounts, profiles, imports }: {
-  accounts: BillingAccountRow[]; profiles: ProfileOption[]; imports: ImportSummary[];
+export default function AccountsAdmin({ accounts, profiles }: {
+  accounts: BillingAccountRow[]; profiles: ProfileOption[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ filename: string; rows: PreviewRow[]; errors: string[] } | null>(null);
-  const [legacyPreview, setLegacyPreview] = useState<LegacyPreview | null>(null);
-  const [legacyFile, setLegacyFile] = useState<File | null>(null);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("name_asc");
+  const [page, setPage] = useState(1);
   const [accountRows, setAccountRows] = useState(accounts);
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [cashAccountId, setCashAccountId] = useState("");
@@ -46,13 +30,36 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setAccountRows(accounts), [accounts]);
   const totalBalance = accountRows.reduce((sum, account) => sum + account.open_balance, 0);
+  const totalPaid = accountRows.reduce((sum, account) => sum + account.total_paid, 0);
   const unlinked = accountRows.filter((account) => !account.profile_id).length;
+  const pendingAccounts = accountRows.filter((account) => account.open_balance > 0).length;
+  const currentAccounts = accountRows.length - pendingAccounts;
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return accountRows;
-    return accountRows.filter((account) => [account.display_name, account.email, account.phone, account.external_reference]
-      .some((value) => value?.toLowerCase().includes(needle)));
-  }, [accountRows, query]);
+    const matches = accountRows.filter((account) => {
+      const matchesQuery = !needle || [account.display_name, account.email, account.phone, account.external_reference]
+        .some((value) => value?.toLowerCase().includes(needle));
+      const matchesStatus = statusFilter === "all"
+        || (statusFilter === "pending" && account.open_balance > 0)
+        || (statusFilter === "current" && account.open_balance <= 0)
+        || (statusFilter === "paid" && account.total_paid > 0)
+        || (statusFilter === "linked" && Boolean(account.profile_id))
+        || (statusFilter === "unlinked" && !account.profile_id);
+      return matchesQuery && matchesStatus;
+    });
+    return [...matches].sort((a, b) => {
+      if (sortBy === "name_desc") return b.display_name.localeCompare(a.display_name, "es", { sensitivity: "base" });
+      if (sortBy === "balance_desc") return b.open_balance - a.open_balance || a.display_name.localeCompare(b.display_name, "es");
+      if (sortBy === "balance_asc") return a.open_balance - b.open_balance || a.display_name.localeCompare(b.display_name, "es");
+      if (sortBy === "paid_desc") return b.total_paid - a.total_paid || a.display_name.localeCompare(b.display_name, "es");
+      if (sortBy === "charges_desc") return b.open_charges - a.open_charges || a.display_name.localeCompare(b.display_name, "es");
+      return a.display_name.localeCompare(b.display_name, "es", { sensitivity: "base" });
+    });
+  }, [accountRows, query, sortBy, statusFilter]);
+  const pageSize = 25;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const visibleAccounts = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   async function api(url: string, options: RequestInit) {
     setError(null); setMessage(null); setBusy(true);
@@ -116,113 +123,24 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
     } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
   }
 
-  async function previewExcel(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    try {
-      const result = await api("/api/admin/billing/import/preview", { method: "POST", body: new FormData(form) });
-      setPreview(result); setMessage(`Excel leído: ${result.rows.length} filas válidas`);
-    } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
-  }
-
-  async function confirmImport() {
-    if (!preview) return;
-    try {
-      const result = await api("/api/admin/billing/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(preview) });
-      setMessage(`Importación terminada: ${result.summary.imported} cargos, ${result.summary.duplicates} duplicados, ${result.summary.errors} errores`);
-      setPreview(null); router.refresh();
-    } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
-  }
-
-  async function previewLegacyExcel(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const file = new FormData(event.currentTarget).get("file");
-    if (!(file instanceof File)) return;
-    const data = new FormData(); data.set("file", file);
-    try {
-      const result = await api("/api/admin/billing/import/legacy/preview", { method: "POST", body: data });
-      setLegacyFile(file); setLegacyPreview(result);
-      setMessage(`Archivo validado: ${result.summary.accounts} clientes y ${result.summary.charges} cargos`);
-    } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
-  }
-
-  async function importLegacyExcel() {
-    if (!legacyFile || !legacyPreview) return;
-    if (!window.confirm(`Se eliminarán las ${legacyPreview.existingAccounts} cuentas actuales y su historial de cobranza.\n\nDespués se importarán ${legacyPreview.summary.accounts} clientes del Excel. ¿Continuar?`)) return;
-    const data = new FormData();
-    data.set("file", legacyFile); data.set("replace_existing", "true"); data.set("confirmation", "REEMPLAZAR");
-    try {
-      const result = await api("/api/admin/billing/import/legacy", { method: "POST", body: data });
-      setMessage(`Listo: se eliminaron ${result.summary.removedAccounts} cuentas de prueba y se importaron ${result.summary.accounts} clientes, ${result.summary.charges} cargos y ${result.summary.payments} pagos.`);
-      setLegacyFile(null); setLegacyPreview(null); router.refresh();
-    } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
-  }
-
   return (
     <div className="space-y-8">
       <div>
         <div className="eyebrow eyebrow-line mb-4 text-gold">Cobranza privada</div>
         <h1 className="serif-display text-[38px] leading-none text-navy sm:text-[48px]">Estados de cuenta</h1>
-        <p className="mt-3 max-w-3xl text-[14px] leading-relaxed text-ink-soft">Importa saldos desde Excel, crea personas manualmente, vincula sus cuentas y registra pagos con trazabilidad.</p>
+        <p className="mt-3 max-w-3xl text-[14px] leading-relaxed text-ink-soft">Consulta saldos e historiales, encuentra rápidamente una cuenta y registra cargos o pagos con trazabilidad.</p>
       </div>
 
       {(message || error) && <div className={`border px-4 py-3 text-[13px] ${error ? "border-red-200 bg-red-50 text-red-800" : "border-green-200 bg-green-50 text-green-800"}`}>{error || message}</div>}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <Metric label="Saldo pendiente" value={mxn(totalBalance)} />
+        <Metric label="Total pagado" value={mxn(totalPaid)} />
         <Metric label="Cuentas activas" value={String(accountRows.length)} />
+        <Metric label="Con saldo" value={String(pendingAccounts)} warn={pendingAccounts > 0} />
+        <Metric label="Al corriente" value={String(currentAccounts)} />
         <Metric label="Sin vincular" value={String(unlinked)} warn={unlinked > 0} />
       </div>
-
-      <section className="border border-line bg-cream-light p-5 sm:p-7">
-        <div className="eyebrow mb-2 text-gold">Archivo oficial</div>
-        <h2 className="serif-display text-[28px] text-navy">Cargar cobranza completa</h2>
-        <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-ink-soft">Para el archivo <strong>COBRANZA MNT.xlsx</strong>. Importa CLIENTES, CARGOS y PAGOS, conserva el historial y calcula lo pagado y pendiente de cada cargo.</p>
-        <form onSubmit={previewLegacyExcel} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="flex-1 text-[11px] font-bold uppercase tracking-[0.15em] text-ink-soft">Archivo .xlsx
-            <input name="file" type="file" accept=".xlsx,.xlsm" required className="mt-2 block w-full border border-line bg-white px-3 py-2 text-[12px]" onChange={() => { setLegacyPreview(null); setLegacyFile(null); }} />
-          </label>
-          <button disabled={busy} className={buttonClass}>Revisar cobranza</button>
-        </form>
-        {legacyPreview && <div className="mt-5 border border-line bg-white p-4 sm:p-5">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Metric label="Clientes" value={String(legacyPreview.summary.accounts)} />
-            <Metric label="Cargos" value={String(legacyPreview.summary.charges)} />
-            <Metric label="Pagos" value={String(legacyPreview.summary.payments)} />
-            <Metric label="Total cargado" value={mxn(legacyPreview.summary.chargeTotal)} />
-            <Metric label="Total pagado" value={mxn(legacyPreview.summary.paymentTotal)} />
-            <Metric label="Saldo pendiente" value={mxn(legacyPreview.summary.openBalance)} />
-          </div>
-          {legacyPreview.warnings.length > 0 && <div className="mt-4 border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-900">{legacyPreview.warnings.map((item) => <div key={item}>{item}</div>)}</div>}
-          <div className="mt-4 border border-red-200 bg-red-50 p-3 text-[12px] leading-relaxed text-red-800">Esta operación reemplazará las <strong>{legacyPreview.existingAccounts} cuentas actuales</strong> y su historial de cobranza. No elimina donativos ni pagos de eventos. Por seguridad, solo se permite durante la migración inicial de hasta 3 cuentas de prueba.</div>
-          <button type="button" disabled={busy || legacyPreview.existingAccounts > 3} onClick={importLegacyExcel} className={`${buttonClass} mt-4`}>Reemplazar e importar</button>
-        </div>}
-      </section>
-
-      <section className="border border-line bg-cream-light p-5 sm:p-7">
-        <h2 className="serif-display text-[28px] text-navy">Importar Excel</h2>
-        <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">Columnas mínimas: <strong>Nombre, Concepto e Importe</strong>. También acepta Referencia, Correo, Teléfono, Periodo, Fecha límite y Notas.</p>
-        <form onSubmit={previewExcel} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="flex-1 text-[11px] font-bold uppercase tracking-[0.15em] text-ink-soft">Archivo .xlsx
-            <input name="file" type="file" accept=".xlsx,.xlsm" required className="mt-2 block w-full border border-line bg-white px-3 py-2 text-[12px]" />
-          </label>
-          <button disabled={busy} className={buttonClass}>Revisar archivo</button>
-        </form>
-        {preview && (
-          <div className="mt-6 space-y-4">
-            {preview.errors.length > 0 && <div className="border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-900">{preview.errors.slice(0, 8).map((item) => <div key={item}>{item}</div>)}</div>}
-            <div className="max-h-[420px] overflow-auto border border-line bg-white">
-              <table className="min-w-[900px] w-full text-left text-[12px]">
-                <thead className="sticky top-0 bg-navy text-cream"><tr><th className="p-3">Fila</th><th className="p-3">Persona</th><th className="p-3">Concepto</th><th className="p-3 text-right">Importe</th><th className="p-3">Asociar a</th></tr></thead>
-                <tbody>{preview.rows.map((row, index) => <tr key={`${row.reference}-${row.row_number}`} className="border-t border-line-soft">
-                  <td className="p-3">{row.row_number}</td><td className="p-3"><strong>{row.name}</strong><div className="text-ink-muted">{row.email || "Sin correo"}</div></td><td className="p-3">{row.concept}<div className="text-ink-muted">{row.period}</div></td><td className="p-3 text-right font-semibold">{mxn(row.amount)}</td><td className="p-3"><select className={inputClass} value={row.account_id} onChange={(event) => setPreview((current) => current ? { ...current, rows: current.rows.map((item, rowIndex) => rowIndex === index ? { ...item, account_id: event.target.value } : item) } : current)}><option value="">Crear cuenta nueva</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.display_name}{account.email ? ` · ${account.email}` : ""}</option>)}</select></td>
-                </tr>)}</tbody>
-              </table>
-            </div>
-            <button type="button" disabled={busy || preview.rows.length === 0} onClick={confirmImport} className={buttonClass}>Confirmar importación</button>
-          </div>
-        )}
-      </section>
 
       <div className="grid gap-5 xl:grid-cols-3">
         <ActionForm title="Crear persona o cuenta" onSubmit={createAccount}>
@@ -254,25 +172,53 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
       </div>
 
       <section>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="serif-display text-[30px] text-navy">Cuentas</h2><p className="text-[12px] text-ink-soft">Vincula cada cuenta con el usuario que podrá verla y pagarla.</p></div><input className={`${inputClass} sm:max-w-xs`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar persona, correo o referencia" /></div>
+        <div><h2 className="serif-display text-[30px] text-navy">Cuentas</h2><p className="text-[12px] text-ink-soft">Filtra, ordena y abre el historial completo de cada persona.</p></div>
+        <div className="mt-4 border border-line bg-cream-light p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_240px]">
+            <input className={inputClass} value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Buscar persona, teléfono o referencia" />
+            <select className={inputClass} value={sortBy} onChange={(event) => { setSortBy(event.target.value); setPage(1); }} aria-label="Ordenar cuentas">
+              <option value="name_asc">Nombre: A a Z</option>
+              <option value="name_desc">Nombre: Z a A</option>
+              <option value="balance_desc">Mayor saldo pendiente</option>
+              <option value="balance_asc">Menor saldo pendiente</option>
+              <option value="paid_desc">Mayor total pagado</option>
+              <option value="charges_desc">Más cargos pendientes</option>
+            </select>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <FilterButton active={statusFilter === "all"} onClick={() => { setStatusFilter("all"); setPage(1); }}>Todas · {accountRows.length}</FilterButton>
+            <FilterButton active={statusFilter === "pending"} onClick={() => { setStatusFilter("pending"); setPage(1); }}>Con saldo · {pendingAccounts}</FilterButton>
+            <FilterButton active={statusFilter === "current"} onClick={() => { setStatusFilter("current"); setPage(1); }}>Al corriente · {currentAccounts}</FilterButton>
+            <FilterButton active={statusFilter === "paid"} onClick={() => { setStatusFilter("paid"); setPage(1); }}>Con pagos · {accountRows.filter((account) => account.total_paid > 0).length}</FilterButton>
+            <FilterButton active={statusFilter === "linked"} onClick={() => { setStatusFilter("linked"); setPage(1); }}>Vinculadas · {accountRows.length - unlinked}</FilterButton>
+            <FilterButton active={statusFilter === "unlinked"} onClick={() => { setStatusFilter("unlinked"); setPage(1); }}>Sin vincular · {unlinked}</FilterButton>
+          </div>
+          <div className="mt-3 text-[11px] text-ink-muted">Mostrando <strong className="text-navy">{filtered.length}</strong> de {accountRows.length} cuentas</div>
+        </div>
         <div className="mt-4 overflow-x-auto border border-line bg-white">
           <table className="min-w-[1040px] w-full text-left text-[12px]">
             <thead className="bg-navy text-cream"><tr><th className="p-3">Cuenta</th><th className="p-3">Contacto</th><th className="p-3 text-right">Saldo pendiente</th><th className="p-3 text-right">Pagado</th><th className="p-3">Vinculación</th><th className="p-3 text-center">Detalle</th></tr></thead>
-            <tbody>{filtered.map((account) => {
+            <tbody>{visibleAccounts.map((account) => {
               const expanded = expandedAccountId === account.id;
               return <AccountTableRows key={account.id} account={account} expanded={expanded} busy={busy} profiles={profiles} onToggle={() => setExpandedAccountId(expanded ? null : account.id)} onLink={linkProfile} onDelete={() => deleteAccount(account)} />;
             })}</tbody>
           </table>
           {filtered.length === 0 && <p className="p-6 text-center text-[13px] text-ink-muted">No hay cuentas que coincidan.</p>}
         </div>
+        {filtered.length > pageSize && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border border-line bg-cream-light px-4 py-3">
+          <div className="text-[11px] text-ink-muted">Página {safePage} de {pageCount} · cuentas {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)}</div>
+          <div className="flex gap-2">
+            <button type="button" disabled={safePage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="border border-line bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-navy disabled:opacity-40">Anterior</button>
+            <button type="button" disabled={safePage === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="border border-line bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-navy disabled:opacity-40">Siguiente</button>
+          </div>
+        </div>}
       </section>
-
-      {imports.length > 0 && <section><h2 className="serif-display text-[28px] text-navy">Últimas importaciones</h2><div className="mt-3 grid gap-2">{imports.map((item) => <div key={item.id} className="flex flex-wrap justify-between gap-2 border border-line bg-cream-light px-4 py-3 text-[12px]"><span><strong>{item.filename}</strong> · {new Date(item.created_at).toLocaleString("es-MX")}</span><span>{item.imported_rows} nuevos · {item.duplicate_rows} duplicados · {item.error_rows} errores</span></div>)}</div></section>}
     </div>
   );
 }
 
 function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) { return <div className={`border p-4 text-center ${warn ? "border-amber-300 bg-amber-50" : "border-line bg-cream-light"}`}><div className="serif-display text-[26px] text-navy">{value}</div><div className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-muted">{label}</div></div>; }
+function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) { return <button type="button" onClick={onClick} className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors ${active ? "border-navy bg-navy text-cream" : "border-line bg-white text-ink-soft hover:border-gold hover:text-navy"}`}>{children}</button>; }
 function ActionForm({ title, onSubmit, children }: { title: string; onSubmit: (event: FormEvent<HTMLFormElement>) => void; children: React.ReactNode }) { return <form onSubmit={onSubmit} className="space-y-3 border border-line bg-cream-light p-5"><h2 className="serif-display text-[24px] text-navy">{title}</h2>{children}</form>; }
 function AccountSelect({ accounts }: { accounts: BillingAccountRow[] }) { return <select className={inputClass} name="account_id" required defaultValue=""><option value="" disabled>Selecciona una cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.display_name} · {mxn(account.open_balance)}</option>)}</select>; }
 

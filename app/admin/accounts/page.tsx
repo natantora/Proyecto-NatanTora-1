@@ -4,7 +4,7 @@ import { query } from "@/lib/db";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import { canManageBilling } from "@/lib/permissions";
 import AccountsAdmin from "./AccountsAdmin";
-import type { BillingAccountRow, BillingChargeRow, BillingPaymentRow, ImportSummary, ProfileOption } from "./types";
+import type { BillingAccountRow, BillingChargeRow, BillingPaymentRow, ProfileOption } from "./types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export default async function AdminAccountsPage() {
   const role = await getUserRole(user.id);
   if (!canManageBilling(role)) redirect("/admin/dashboard?error=no_access");
 
-  const [accountResult, profileResult, importResult, chargeResult, paymentResult] = await Promise.all([
+  const [accountResult, profileResult, chargeResult, paymentResult] = await Promise.all([
     query<{
       id: string; display_name: string; email: string | null; phone: string | null;
       external_reference: string | null; notes: string | null; profile_id: string | null;
@@ -45,11 +45,6 @@ export default async function AdminAccountsPage() {
     query<ProfileOption>(
       `SELECT id, COALESCE(full_name, email) AS full_name, email
          FROM profiles WHERE status = 'approved' ORDER BY COALESCE(full_name, email)`,
-    ),
-    query<ImportSummary>(
-      `SELECT id, filename, total_rows, imported_rows, duplicate_rows, error_rows,
-              created_at::text
-         FROM billing_imports ORDER BY created_at DESC LIMIT 8`,
     ),
     query<BillingChargeRow & { account_id: string; original_amount: number; outstanding_amount: number }>(
       `SELECT id, account_id, concept, period,
@@ -85,6 +80,6 @@ export default async function AdminAccountsPage() {
   }));
 
   return (
-    <AccountsAdmin accounts={accounts} profiles={profileResult.rows} imports={importResult.rows} />
+    <AccountsAdmin accounts={accounts} profiles={profileResult.rows} />
   );
 }
