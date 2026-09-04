@@ -20,6 +20,7 @@ export type Photo = {
   path: string;
   publicUrl: string;
   category: Category;
+  album: string;
   timestamp: number;
   caption: string | null;
   uploadedBy: string | null;

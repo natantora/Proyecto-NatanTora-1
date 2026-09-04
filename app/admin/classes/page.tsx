@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import ClassesAdmin from "./ClassesAdmin";
+import ClassesAdmin, { type ClassRow } from "./ClassesAdmin";
 import { createClient, createAdminClient } from "@/lib/data/server";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import {
@@ -41,7 +41,7 @@ export default async function ClassesPage() {
         </p>
       </div>
       <ClassesAdmin
-        initialClasses={(data ?? []) as any}
+        initialClasses={(data ?? []) as ClassRow[]}
         currentUserId={user.id}
         currentUserRole={role}
         canPublishDirect={canPublishDirectly(role)}

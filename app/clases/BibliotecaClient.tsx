@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { isStorageUrl } from '@/lib/class-media'
+import Image from 'next/image'
+import { isStorageUrl, youtubeThumbnailUrl, youtubeVideoId } from '@/lib/class-media'
 
 type ClassRow = {
   id: string
@@ -10,6 +11,7 @@ type ClassRow = {
   category: string | null
   media_type: 'video' | 'audio' | 'text' | null
   media_url: string | null
+  thumbnail_url: string | null
   rabbi: string | null
   duration_minutes: number | null
   published_at: string | Date | null
@@ -62,8 +64,8 @@ const TYPE_COLOR: Record<string, string> = {
 function toEmbedUrl(url: string): string | null {
   if (!url) return null
   // YouTube: https://youtu.be/VIDEO_ID  |  https://www.youtube.com/watch?v=VIDEO_ID  |  shorts
-  const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/))([\w-]{11})/)
-  if (yt) return `https://www.youtube.com/embed/${yt[1]}?rel=0`
+  const youtubeId = youtubeVideoId(url)
+  if (youtubeId) return `https://www.youtube.com/embed/${youtubeId}?rel=0`
   // Vimeo: https://vimeo.com/VIDEO_ID
   const vm = url.match(/vimeo\.com\/(?:video\/)?(\d+)/)
   if (vm) return `https://player.vimeo.com/video/${vm[1]}`
@@ -227,8 +229,25 @@ export default function BibliotecaClient({ classes, error, isLoggedIn }: { class
             {filtered.map(c => {
               const type = c.media_type ?? 'text'
               const isPlaying = playingId === c.id
+              const thumbnail = c.thumbnail_url || youtubeThumbnailUrl(c.media_url || '')
               return (
                 <article key={c.id} className="bg-cream-light p-7 lg:p-8 hover:bg-white transition-colors flex flex-col">
+                  {thumbnail && (
+                    <button
+                      type="button"
+                      onClick={() => c.media_url && setPlayingId(isPlaying ? null : c.id)}
+                      disabled={!c.media_url}
+                      className="group/cover relative mb-5 block aspect-video w-full overflow-hidden bg-navy-deep text-left"
+                      aria-label={c.media_url ? `Abrir ${c.title}` : `Portada de ${c.title}`}
+                    >
+                      <Image src={thumbnail} alt={`Portada de ${c.title}`} fill sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover/cover:scale-[1.03]" unoptimized />
+                      {c.media_url && (type === 'video' || youtubeVideoId(c.media_url)) && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-navy-deep/20 transition-colors group-hover/cover:bg-navy-deep/35">
+                          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gold text-lg text-navy-deep shadow-lg">▶</span>
+                        </span>
+                      )}
+                    </button>
+                  )}
                   <div className="flex items-start justify-between gap-3 mb-4">
                     <span className={`text-[10px] font-bold tracking-[0.2em] uppercase px-2 py-1 ${TYPE_COLOR[type]}`}>
                       {TYPE_LABEL[type]}

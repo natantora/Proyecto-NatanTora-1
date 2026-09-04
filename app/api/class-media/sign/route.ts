@@ -5,6 +5,7 @@ import { canCreateOwnClasses, type Role } from "@/lib/permissions";
 import {
   ALLOWED_VIDEO_TYPES,
   ALLOWED_AUDIO_TYPES,
+  ALLOWED_IMAGE_TYPES,
 } from "@/lib/class-media";
 import { mediaUrl, signedUploadUrl } from "@/lib/storage";
 
@@ -48,9 +49,10 @@ export async function POST(req: NextRequest) {
 
   const isVideo = ALLOWED_VIDEO_TYPES.includes(contentType);
   const isAudio = ALLOWED_AUDIO_TYPES.includes(contentType);
-  if (!isVideo && !isAudio) {
+  const isImage = ALLOWED_IMAGE_TYPES.includes(contentType);
+  if (!isVideo && !isAudio && !isImage) {
     return NextResponse.json({
-      error: `Formato no permitido: ${contentType}. Usa MP4, MOV, WebM (video) o MP3, M4A, WAV (audio).`
+      error: `Formato no permitido: ${contentType}. Usa JPEG, PNG, WebP o HEIC (imagen); MP4, MOV o WebM (video); o MP3, M4A, WAV u OGG (audio).`
     }, { status: 400 });
   }
   if (kind === "video" && !isVideo) {
@@ -59,13 +61,19 @@ export async function POST(req: NextRequest) {
   if (kind === "audio" && !isAudio) {
     return NextResponse.json({ error: "El archivo no es de audio" }, { status: 400 });
   }
+  if (kind === "thumbnail" && !isImage) {
+    return NextResponse.json({ error: "El archivo no es una imagen válida" }, { status: 400 });
+  }
+  if (!["video", "audio", "thumbnail"].includes(kind)) {
+    return NextResponse.json({ error: "Tipo de archivo inválido" }, { status: 400 });
+  }
 
   // Generar path único
-  const ext = (filename.split(".").pop() || (isVideo ? "mp4" : "mp3")).toLowerCase().slice(0, 5);
+  const ext = (filename.split(".").pop() || (isVideo ? "mp4" : isAudio ? "mp3" : "jpg")).toLowerCase().slice(0, 5);
   const baseName = filename.replace(/\.[^.]+$/, "");
-  const slug = slugify(baseName) || (isVideo ? "video" : "audio");
+  const slug = slugify(baseName) || (isVideo ? "video" : isAudio ? "audio" : "portada");
   const timestamp = Date.now();
-  const folder = isVideo ? "video" : "audio";
+  const folder = isVideo ? "video" : isAudio ? "audio" : "thumbnail";
   const path = `class-media/${folder}/${timestamp}-${slug}.${ext}`;
 
   try {

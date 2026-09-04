@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/data/server";
 import { getUserRole } from "@/lib/admin-bootstrap";
 import { canReviewClasses, type Role } from "@/lib/permissions";
-import PendingReviewList from "./PendingReviewList";
+import PendingReviewList, { type PendingReviewItem } from "./PendingReviewList";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +16,14 @@ export default async function PendingReviewPage() {
   const supabase = createAdminClient();
   const { data: pending } = await supabase
     .from("classes")
-    .select("id, title, description, category, media_type, media_url, rabbi, duration_minutes, owner_id, created_at, rejection_reason")
+    .select("id, title, description, category, media_type, media_url, thumbnail_url, rabbi, duration_minutes, owner_id, created_at, rejection_reason")
     .eq("pending_review", true)
     .order("created_at", { ascending: true });
 
   // Cargar nombres de los rabinos (owner_id → profile.full_name)
-  const ownerIds = Array.from(new Set((pending ?? []).map((c: any) => c.owner_id).filter(Boolean) as string[]));
-  let ownerMap: Record<string, { name: string; email: string }> = {};
+  const pendingItems = (pending ?? []) as PendingReviewItem[];
+  const ownerIds = Array.from(new Set(pendingItems.map((c) => c.owner_id).filter((id): id is string => Boolean(id))));
+  const ownerMap: Record<string, { name: string; email: string }> = {};
   if (ownerIds.length) {
     const { data: profs } = await supabase
       .from("profiles")
@@ -45,7 +46,7 @@ export default async function PendingReviewPage() {
           contenido, publica si está listo o devuelve con un comentario.
         </p>
       </div>
-      <PendingReviewList items={(pending ?? []) as any} owners={ownerMap} />
+      <PendingReviewList items={pendingItems} owners={ownerMap} />
     </div>
   );
 }

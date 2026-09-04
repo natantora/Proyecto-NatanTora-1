@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { youtubeThumbnailUrl } from "@/lib/class-media";
 
-type Item = {
+export type PendingReviewItem = {
   id: string;
   title: string;
   description: string | null;
   category: string | null;
   media_type: string | null;
   media_url: string | null;
+  thumbnail_url: string | null;
   rabbi: string | null;
   duration_minutes: number | null;
   owner_id: string | null;
@@ -20,7 +23,7 @@ export default function PendingReviewList({
   items,
   owners,
 }: {
-  items: Item[];
+  items: PendingReviewItem[];
   owners: Record<string, { name: string; email: string }>;
 }) {
   const router = useRouter();
@@ -95,6 +98,7 @@ export default function PendingReviewList({
         const owner = c.owner_id ? owners[c.owner_id] : null;
         const isLoading = loadingId === c.id;
         const isRejecting = rejectingId === c.id;
+        const thumbnail = c.thumbnail_url || youtubeThumbnailUrl(c.media_url || "");
         return (
           <article key={c.id} className="bg-cream-light border border-line p-5 lg:p-6 space-y-4">
             <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -131,6 +135,10 @@ export default function PendingReviewList({
 
             {c.description && (
               <p className="text-[14px] text-ink leading-relaxed">{c.description}</p>
+            )}
+
+            {thumbnail && (
+              <div className="relative aspect-video w-full max-w-md overflow-hidden"><Image src={thumbnail} alt={`Portada de ${c.title}`} fill sizes="448px" className="object-cover" unoptimized /></div>
             )}
 
             {c.media_url && (

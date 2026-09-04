@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
   const file = form.get("file");
   const category = String(form.get("category") || "general");
   const caption = String(form.get("caption") || "").trim().slice(0, 200);
+  const album = String(form.get("album") || "").trim().replace(/\s+/g, " ").slice(0, 80);
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Falta archivo" }, { status: 400 });
@@ -60,23 +61,28 @@ export async function POST(req: NextRequest) {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 4);
   const timestamp = Date.now();
   const captionSlug = caption ? "-" + slugify(caption) : "";
-  const path = `gallery/${category}/${timestamp}${captionSlug}.${ext}`;
+  const albumName = album || "General";
+  const albumSlug = slugify(albumName) || "general";
+  const directory = `gallery/${category}/${albumSlug}`;
+  const path = `${directory}/${timestamp}${captionSlug}.${ext}`;
 
-  try { await putObject(path, buf, file.type); }
-  catch (error) {
+  const captionPath = `${directory}/${timestamp}.caption.txt`;
+  const uploaderPath = `${directory}/${timestamp}.uploader.txt`;
+  const albumPath = `${directory}/_album.txt`;
+  try {
+    await putObject(path, buf, file.type);
+    await Promise.all([
+      caption
+        ? putObject(captionPath, Buffer.from(caption, "utf8"), "text/plain; charset=utf-8")
+        : Promise.resolve(),
+      putObject(uploaderPath, Buffer.from(user.id, "utf8"), "text/plain; charset=utf-8"),
+      putObject(albumPath, Buffer.from(albumName, "utf8"), "text/plain; charset=utf-8"),
+    ]);
+  } catch (error) {
     console.error("[api/gallery POST] upload error:", error);
+    await deleteObjects([path, captionPath, uploaderPath]).catch(() => undefined);
     return NextResponse.json({ error: "No se pudo guardar la foto" }, { status: 500 });
   }
-
-  // Embebemos caption + uploader en una "tag" adicional via lista de tags vacía
-  // (no podemos tocar user_metadata via service_role del lado del cliente JS,
-  // así que el caption se queda en el filename como slug + un sidecar JSON pequeño)
-  if (caption) {
-    const sidecarPath = `gallery/${category}/${timestamp}.caption.txt`;
-    await putObject(sidecarPath, Buffer.from(caption, "utf8"), "text/plain; charset=utf-8");
-  }
-  const uploaderPath = `gallery/${category}/${timestamp}.uploader.txt`;
-  await putObject(uploaderPath, Buffer.from(user.id, "utf8"), "text/plain; charset=utf-8");
 
   return NextResponse.json({
     ok: true,
@@ -84,6 +90,7 @@ export async function POST(req: NextRequest) {
     publicUrl: mediaUrl(path),
     caption: caption || null,
     category,
+    album: albumName,
     timestamp,
   });
 }
@@ -106,19 +113,20 @@ export async function DELETE(req: NextRequest) {
 
   // Path debe ser en la forma {category}/{timestamp}.{ext}
   const parts = path.split("/");
-  if (parts.length !== 3 || parts[0] !== "gallery" || !isValidCategory(parts[1])) {
+  if (![3, 4].includes(parts.length) || parts[0] !== "gallery" || !isValidCategory(parts[1])) {
     return NextResponse.json({ error: "Path inválido" }, { status: 400 });
   }
 
   // Extraer timestamp del filename
-  const filename = parts[2];
+  const filename = parts.at(-1)!;
   const timestamp = filename.split(/[-.]/)[0];
   if (!/^\d+$/.test(timestamp)) {
     return NextResponse.json({ error: "Timestamp inválido en filename" }, { status: 400 });
   }
 
-  const captionPath = `gallery/${parts[1]}/${timestamp}.caption.txt`;
-  const uploaderPath = `gallery/${parts[1]}/${timestamp}.uploader.txt`;
+  const directory = parts.slice(0, -1).join("/");
+  const captionPath = `${directory}/${timestamp}.caption.txt`;
+  const uploaderPath = `${directory}/${timestamp}.uploader.txt`;
   try { await deleteObjects([path, captionPath, uploaderPath]); }
   catch (error) {
     console.error("[api/gallery DELETE] error:", error);

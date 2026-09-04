@@ -13,7 +13,7 @@ export default async function Clases() {
   const { data: { user } } = await supabase.auth.getUser()
   const { data: classes, error } = await supabase
     .from('classes')
-    .select('id, title, description, category, media_type, media_url, rabbi, duration_minutes, published_at, created_at')
+    .select('id, title, description, category, media_type, media_url, thumbnail_url, rabbi, duration_minutes, published_at, created_at')
     .eq('published', true)
     .order('published_at', { ascending: false, nullsFirst: false })
     .limit(500)

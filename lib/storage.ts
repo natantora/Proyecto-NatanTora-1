@@ -51,10 +51,20 @@ export async function deleteObjects(keys: string[]) {
 }
 
 export async function listObjects(prefix: string) {
-  const result = await storageClient().send(new ListObjectsV2Command({
-    Bucket: bucketName(), Prefix: prefix, MaxKeys: 1000,
-  }));
-  return result.Contents ?? [];
+  const client = storageClient();
+  const contents = [];
+  let continuationToken: string | undefined;
+  do {
+    const result = await client.send(new ListObjectsV2Command({
+      Bucket: bucketName(),
+      Prefix: prefix,
+      MaxKeys: 1000,
+      ContinuationToken: continuationToken,
+    }));
+    contents.push(...(result.Contents ?? []));
+    continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return contents;
 }
 
 export async function getObjectText(key: string): Promise<string | null> {

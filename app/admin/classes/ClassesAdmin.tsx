@@ -1,24 +1,29 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import Image from 'next/image'
 import type { Role } from '@/lib/permissions'
 import {
   ALLOWED_VIDEO_TYPES,
   ALLOWED_AUDIO_TYPES,
   MAX_VIDEO_SIZE_MB,
   MAX_AUDIO_SIZE_MB,
+  MAX_THUMBNAIL_SIZE_MB,
+  ALLOWED_IMAGE_TYPES,
   isStorageUrl,
+  youtubeThumbnailUrl,
 } from '@/lib/class-media'
 
 type MediaType = 'video' | 'audio' | 'text'
 
-type ClassRow = {
+export type ClassRow = {
   id: string
   title: string
   description: string | null
   category: string | null
   media_type: MediaType | null
   media_url: string | null
+  thumbnail_url: string | null
   rabbi: string | null
   duration_minutes: number | null
   published: boolean
@@ -35,6 +40,7 @@ type FormState = {
   category: string
   media_type: MediaType
   media_url: string
+  thumbnail_url: string
   duration_minutes: number | ''
   description: string
   published: boolean
@@ -46,6 +52,7 @@ const INITIAL_FORM: FormState = {
   category: 'Halajá',
   media_type: 'audio',
   media_url: '',
+  thumbnail_url: '',
   duration_minutes: '',
   description: '',
   published: true,
@@ -94,6 +101,7 @@ export default function ClassesAdmin({
       category: c.category || 'Halajá',
       media_type: (c.media_type || 'audio') as MediaType,
       media_url: c.media_url || '',
+      thumbnail_url: c.thumbnail_url || '',
       duration_minutes: c.duration_minutes ?? '',
       description: c.description || '',
       published: !!c.published,
@@ -121,6 +129,7 @@ export default function ClassesAdmin({
         category: form.category,
         media_type: form.media_type,
         media_url: form.media_url.trim() || null,
+        thumbnail_url: form.thumbnail_url.trim() || null,
         duration_minutes: form.duration_minutes === '' ? null : Number(form.duration_minutes),
         description: form.description.trim() || null,
         published: form.published,
@@ -161,8 +170,8 @@ export default function ClassesAdmin({
           setMsg(json.error || 'Error al guardar')
         }
       }
-    } catch (e: any) {
-      setMsg(e?.message || 'Error de red')
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : 'Error de red')
     } finally {
       setLoading(false)
     }
@@ -274,6 +283,14 @@ export default function ClassesAdmin({
                 />
               </Field>
             )}
+            <Field label="Imagen de portada" full>
+              <ThumbnailUploader
+                currentUrl={form.thumbnail_url}
+                mediaUrl={form.media_url}
+                onUploaded={(url) => setForm((prev) => ({ ...prev, thumbnail_url: url }))}
+                onClear={() => setForm((prev) => ({ ...prev, thumbnail_url: '' }))}
+              />
+            </Field>
             <Field label="Duración (minutos)">
               <input type="number" min="0" value={form.duration_minutes} onChange={e => setForm({ ...form, duration_minutes: e.target.value === '' ? '' : Number(e.target.value) })}
                 placeholder="45" className="w-full border border-line px-3 py-2 text-[14px] focus:outline-none focus:border-gold bg-white" />
@@ -314,8 +331,10 @@ export default function ClassesAdmin({
         <div className="space-y-2">
           {classes.map(c => {
             const canEditThis = canEditAll || c.owner_id === currentUserId
+            const thumbnail = c.thumbnail_url || youtubeThumbnailUrl(c.media_url || '')
             return (
               <div key={c.id} className="bg-cream-light border border-line p-4 flex items-start gap-4 hover:border-gold transition-colors">
+                {thumbnail && <div className="relative hidden h-20 w-32 shrink-0 overflow-hidden sm:block"><Image src={thumbnail} alt="" fill sizes="128px" className="object-cover" unoptimized /></div>}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={`text-[9px] font-bold tracking-[0.2em] uppercase px-2 py-0.5 ${
@@ -374,6 +393,97 @@ export default function ClassesAdmin({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function ThumbnailUploader({
+  currentUrl,
+  mediaUrl,
+  onUploaded,
+  onClear,
+}: {
+  currentUrl: string
+  mediaUrl: string
+  onUploaded: (url: string) => void
+  onClear: () => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const automaticThumbnail = youtubeThumbnailUrl(mediaUrl)
+  const preview = currentUrl || automaticThumbnail
+
+  async function handleFile(file: File) {
+    setError(null)
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setError('Usa una imagen JPG, PNG, WebP o HEIC.')
+      return
+    }
+    if (file.size > MAX_THUMBNAIL_SIZE_MB * 1024 * 1024) {
+      setError(`La imagen supera el máximo de ${MAX_THUMBNAIL_SIZE_MB}MB.`)
+      return
+    }
+
+    setUploading(true)
+    try {
+      const signRes = await fetch('/api/class-media/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type, kind: 'thumbnail' }),
+      })
+      const signJson = await signRes.json().catch(() => ({}))
+      if (!signRes.ok) throw new Error(signJson.error || 'No se pudo preparar la imagen')
+
+      const uploadRes = await fetch(signJson.signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      if (!uploadRes.ok) throw new Error('No se pudo subir la imagen')
+      onUploaded(signJson.publicUrl)
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'No se pudo subir la imagen')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-center">
+      <div className="relative aspect-video overflow-hidden border border-line bg-cream-dark">
+        {preview ? (
+          <Image src={preview} alt="Vista previa de la portada" fill sizes="180px" className="object-cover" unoptimized />
+        ) : (
+          <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-ink-muted">
+            La portada aparecerá aquí
+          </div>
+        )}
+      </div>
+      <div>
+        <input
+          type="file"
+          accept={ALLOWED_IMAGE_TYPES.join(',')}
+          disabled={uploading}
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) void handleFile(file)
+            event.target.value = ''
+          }}
+          className="block w-full text-[13px] file:mr-3 file:border-0 file:bg-navy file:px-4 file:py-2 file:text-[11px] file:font-bold file:uppercase file:tracking-wider file:text-cream"
+        />
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-soft">
+          {automaticThumbnail && !currentUrl
+            ? 'Se está usando automáticamente la miniatura de YouTube. Puedes reemplazarla con otra imagen.'
+            : 'JPG, PNG, WebP o HEIC. Se mostrará como portada en la biblioteca.'}
+        </p>
+        {currentUrl && (
+          <button type="button" onClick={onClear} className="mt-2 text-[11px] font-semibold text-navy underline hover:text-gold">
+            Quitar portada manual
+          </button>
+        )}
+        {uploading && <p className="mt-2 text-[11px] text-gold-deep">Subiendo portada…</p>}
+        {error && <p className="mt-2 border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</p>}
+      </div>
     </div>
   )
 }
@@ -443,8 +553,8 @@ function MediaUploader({
 
       setProgress(100)
       onUploaded(signJson.publicUrl)
-    } catch (e: any) {
-      setError(e?.message || 'Error subiendo archivo')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Error subiendo archivo')
     } finally {
       setUploading(false)
     }

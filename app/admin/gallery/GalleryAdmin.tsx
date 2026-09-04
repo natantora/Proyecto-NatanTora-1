@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ALL_CATEGORIES, CATEGORY_LABEL, type Photo, type Category } from "@/lib/gallery";
 
@@ -9,11 +10,16 @@ export default function GalleryAdmin({ initialPhotos }: { initialPhotos: Photo[]
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
   const [category, setCategory] = useState<Category>("general");
+  const [album, setAlbum] = useState(() => initialPhotos[0]?.album || "General");
+  const [newAlbum, setNewAlbum] = useState("");
   const [caption, setCaption] = useState("");
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Category | "all">("all");
+  const [albumFilter, setAlbumFilter] = useState<string>("all");
+
+  const albums = Array.from(new Set(photos.map((photo) => photo.album))).sort((a, b) => a.localeCompare(b, "es"));
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -25,6 +31,7 @@ export default function GalleryAdmin({ initialPhotos }: { initialPhotos: Photo[]
     const total = files.length;
     let success = 0;
     const newPhotos: Photo[] = [];
+    const selectedAlbum = newAlbum.trim() || album || "General";
 
     for (let i = 0; i < total; i++) {
       const file = files[i];
@@ -33,6 +40,7 @@ export default function GalleryAdmin({ initialPhotos }: { initialPhotos: Photo[]
         const fd = new FormData();
         fd.append("file", file);
         fd.append("category", category);
+        fd.append("album", selectedAlbum);
         if (caption.trim()) fd.append("caption", caption.trim());
 
         const res = await fetch("/api/gallery", { method: "POST", body: fd });
@@ -44,6 +52,7 @@ export default function GalleryAdmin({ initialPhotos }: { initialPhotos: Photo[]
           path: j.path,
           publicUrl: j.publicUrl,
           category: j.category,
+          album: j.album,
           timestamp: j.timestamp,
           caption: j.caption,
           uploadedBy: null,
@@ -59,6 +68,8 @@ export default function GalleryAdmin({ initialPhotos }: { initialPhotos: Photo[]
     setProgress(`${success} de ${total} subidas`);
     setUploading(false);
     setCaption("");
+    setAlbum(selectedAlbum);
+    setNewAlbum("");
     if (fileInputRef.current) fileInputRef.current.value = "";
     setTimeout(() => setProgress(null), 4000);
     router.refresh();
@@ -76,7 +87,10 @@ export default function GalleryAdmin({ initialPhotos }: { initialPhotos: Photo[]
     }
   }
 
-  const filtered = filter === "all" ? photos : photos.filter((p) => p.category === filter);
+  const filtered = photos.filter((photo) =>
+    (filter === "all" || photo.category === filter) &&
+    (albumFilter === "all" || photo.album === albumFilter),
+  );
 
   return (
     <div className="space-y-8">
@@ -103,6 +117,36 @@ export default function GalleryAdmin({ initialPhotos }: { initialPhotos: Photo[]
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="block">
+            <span className="text-[11px] text-ink-muted uppercase tracking-widest font-bold mb-1 block">
+              Álbum / carpeta
+            </span>
+            <select
+              value={album}
+              onChange={(e) => { setAlbum(e.target.value); setNewAlbum(""); }}
+              disabled={uploading}
+              className="w-full border border-line px-3 py-2.5 text-[14px] focus:outline-none focus:border-gold bg-white"
+            >
+              {albums.length === 0 && <option value="General">General</option>}
+              {albums.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-[11px] text-ink-muted uppercase tracking-widest font-bold mb-1 block">
+              Crear álbum nuevo (opcional)
+            </span>
+            <input
+              type="text"
+              value={newAlbum}
+              onChange={(e) => setNewAlbum(e.target.value)}
+              disabled={uploading}
+              maxLength={80}
+              placeholder="Ej: Rosh Hashaná 2026"
+              className="w-full border border-line px-3 py-2.5 text-[14px] focus:outline-none focus:border-gold bg-white"
+            />
           </label>
 
           <label className="block">
@@ -190,27 +234,50 @@ export default function GalleryAdmin({ initialPhotos }: { initialPhotos: Photo[]
         })}
       </div>
 
+      <div>
+        <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-ink-muted">Álbumes</div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setAlbumFilter("all")}
+            className={`border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] ${albumFilter === "all" ? "border-gold bg-gold text-navy-deep" : "border-line bg-cream-light text-ink-soft hover:border-gold"}`}
+          >
+            Todos
+          </button>
+          {albums.map((name) => (
+            <button
+              key={name}
+              onClick={() => setAlbumFilter(name)}
+              className={`border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] ${albumFilter === name ? "border-gold bg-gold text-navy-deep" : "border-line bg-cream-light text-ink-soft hover:border-gold"}`}
+            >
+              {name} ({photos.filter((photo) => photo.album === name).length})
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Grid de fotos */}
       {filtered.length === 0 ? (
         <div className="border border-line bg-cream-light p-12 text-center">
           <p className="text-[15px] text-ink-soft italic">
-            No hay fotos {filter === "all" ? "todavía" : `en ${CATEGORY_LABEL[filter]}`}.
+            No hay fotos con estos filtros.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {filtered.map((p) => (
             <div key={p.path} className="relative aspect-square bg-cream-dark border border-line group overflow-hidden">
-              <img
+              <Image
                 src={p.publicUrl}
                 alt={p.caption || "Foto"}
-                className="w-full h-full object-cover"
-                loading="lazy"
+                fill
+                sizes="(max-width: 1024px) 50vw, 25vw"
+                className="object-cover"
+                unoptimized
               />
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-navy-deep/85 pointer-events-none" />
               <div className="absolute bottom-2 left-2 right-2 text-cream z-10">
                 <div className="text-[9px] tracking-[0.2em] uppercase text-gold-light">
-                  {CATEGORY_LABEL[p.category]}
+                  {p.album} · {CATEGORY_LABEL[p.category]}
                 </div>
                 {p.caption && (
                   <div className="text-[11px] font-semibold leading-tight mt-0.5 line-clamp-2">

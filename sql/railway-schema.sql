@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS classes (
   category TEXT,
   media_type TEXT CHECK (media_type IN ('video','audio','text')),
   media_url TEXT,
+  thumbnail_url TEXT,
   rabbi TEXT DEFAULT 'Rab Natan',
   duration_minutes INT,
   published BOOLEAN NOT NULL DEFAULT FALSE,
@@ -93,6 +94,8 @@ CREATE TABLE IF NOT EXISTS classes (
 );
 CREATE INDEX IF NOT EXISTS idx_classes_published ON classes(published, published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_classes_owner ON classes(owner_id);
+
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
 
 CREATE TABLE IF NOT EXISTS events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

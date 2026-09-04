@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     category: body.category ?? "General",
     media_type: body.media_type ?? "text",
     media_url: body.media_url ?? null,
+    thumbnail_url: body.thumbnail_url ?? null,
     rabbi: body.rabbi ?? "Rab Natán",
     duration_minutes: body.duration_minutes ?? null,
     published: rabinoFlow ? false : wantsPublished,
