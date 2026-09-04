@@ -20,6 +20,10 @@ export async function POST(req: NextRequest) {
     const parsed = await parseLegacyBillingWorkbook(file);
     const result = await transaction(async (client) => {
       const previous = await client.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM billing_accounts");
+      const previousAccountCount = Number(previous.rows[0]?.count || 0);
+      if (previousAccountCount > 3) {
+        throw new Error("La migración inicial está bloqueada porque ya existen más de 3 cuentas. No se eliminó ningún dato.");
+      }
       const deletedPayments = await client.query("DELETE FROM payments WHERE billing_account_id IS NOT NULL");
       await client.query("DELETE FROM billing_accounts");
       await client.query("DELETE FROM billing_imports");
@@ -81,10 +85,10 @@ export async function POST(req: NextRequest) {
 
       await recordFinancialAudit(client, {
         actorId: admin.user.id, action: "billing_import.legacy_replaced", entityType: "billing_import", entityId: importId,
-        before: { accounts: Number(previous.rows[0]?.count || 0), payments: deletedPayments.rowCount || 0 },
+        before: { accounts: previousAccountCount, payments: deletedPayments.rowCount || 0 },
         after: parsed.summary, metadata: { filename: file.name, warnings: parsed.warnings },
       });
-      return { removedAccounts: Number(previous.rows[0]?.count || 0), removedPayments: deletedPayments.rowCount || 0, ...parsed.summary };
+      return { removedAccounts: previousAccountCount, removedPayments: deletedPayments.rowCount || 0, ...parsed.summary };
     });
     revalidatePath("/admin/accounts");
     revalidatePath("/mi-cuenta");

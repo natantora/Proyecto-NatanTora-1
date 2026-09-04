@@ -194,8 +194,8 @@ export default function AccountsAdmin({ accounts, profiles, imports }: {
             <Metric label="Saldo pendiente" value={mxn(legacyPreview.summary.openBalance)} />
           </div>
           {legacyPreview.warnings.length > 0 && <div className="mt-4 border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-900">{legacyPreview.warnings.map((item) => <div key={item}>{item}</div>)}</div>}
-          <div className="mt-4 border border-red-200 bg-red-50 p-3 text-[12px] leading-relaxed text-red-800">Esta operación reemplazará las <strong>{legacyPreview.existingAccounts} cuentas actuales</strong> y su historial de cobranza. No elimina donativos ni pagos de eventos.</div>
-          <button type="button" disabled={busy} onClick={importLegacyExcel} className={`${buttonClass} mt-4`}>Reemplazar e importar</button>
+          <div className="mt-4 border border-red-200 bg-red-50 p-3 text-[12px] leading-relaxed text-red-800">Esta operación reemplazará las <strong>{legacyPreview.existingAccounts} cuentas actuales</strong> y su historial de cobranza. No elimina donativos ni pagos de eventos. Por seguridad, solo se permite durante la migración inicial de hasta 3 cuentas de prueba.</div>
+          <button type="button" disabled={busy || legacyPreview.existingAccounts > 3} onClick={importLegacyExcel} className={`${buttonClass} mt-4`}>Reemplazar e importar</button>
         </div>}
       </section>
 
