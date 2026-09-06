@@ -30,9 +30,14 @@ export default function HeaderClient({ isLoggedIn, approved, isAdmin, userName }
   const showPendiente = isLoggedIn && !approved;
 
   async function logout() {
-    const response = await fetch("/api/admin/logout", { method: "POST" });
+    const response = await fetch("/api/admin/logout", {
+      method: "POST",
+      headers: { "X-Logout-Mode": "fetch" },
+      cache: "no-store",
+    });
     if (!response.ok) return;
-    window.location.replace("/");
+    if (window.location.pathname === "/") window.location.reload();
+    else window.location.assign("/");
   }
 
   return (

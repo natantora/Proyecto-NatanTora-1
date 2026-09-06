@@ -35,11 +35,16 @@ export default function Navbar() {
   }, []);
 
   const handleLogout = async () => {
-    const response = await fetch('/api/admin/logout', { method: 'POST' });
+    const response = await fetch('/api/admin/logout', {
+      method: 'POST',
+      headers: { 'X-Logout-Mode': 'fetch' },
+      cache: 'no-store',
+    });
     if (!response.ok) return;
     setUser(null);
     setProfile(null);
-    window.location.replace('/');
+    if (window.location.pathname === '/') window.location.reload();
+    else window.location.assign('/');
   };
 
   return (

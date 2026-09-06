@@ -2,9 +2,13 @@
 
 export default function LogoutButton() {
   async function logout() {
-    const response = await fetch("/api/admin/logout", { method: "POST" });
+    const response = await fetch("/api/admin/logout", {
+      method: "POST",
+      headers: { "X-Logout-Mode": "fetch" },
+      cache: "no-store",
+    });
     if (!response.ok) return;
-    window.location.replace("/");
+    window.location.assign("/");
   }
 
   return (
