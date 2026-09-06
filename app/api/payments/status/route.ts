@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   if (!payment.rows[0]) return NextResponse.json({ error: "Pago no encontrado" }, { status: 404 });
   if (payment.rows[0].user_id !== user.id) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   let status = payment.rows[0].status;
-  if (status === "pending" && internalPaymentId && mercadoPagoConfigured() && (providerPaymentId || payment.rows[0].mercadopago_payment_id)) {
+  if (!["paid", "refunded", "charged_back"].includes(status) && internalPaymentId && mercadoPagoConfigured() && (providerPaymentId || payment.rows[0].mercadopago_payment_id)) {
     try {
       const remote = await getMercadoPagoPayment(providerPaymentId || payment.rows[0].mercadopago_payment_id || "");
       if ((remote.external_reference || remote.metadata?.payment_id) === payment.rows[0].id) {
@@ -59,10 +59,12 @@ export async function DELETE(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const paymentId = req.nextUrl.searchParams.get("internal_payment_id")?.trim() || "";
   if (!paymentId) return NextResponse.json({ error: "Pago inválido" }, { status: 400 });
-  const payment = await query<{ id: string }>(
-    "SELECT id FROM payments WHERE id = $1 AND user_id = $2 AND status = 'pending' LIMIT 1",
+  const payment = await query<{ id: string; payment_method: string | null }>(
+    "SELECT id, payment_method FROM payments WHERE id = $1 AND user_id = $2 AND status = 'pending' LIMIT 1",
     [paymentId, user.id],
   );
-  if (payment.rows[0]) await failPendingPayment(payment.rows[0].id);
+  // Volver desde Mercado Pago no demuestra que el cobro haya fallado. La
+  // notificación firmada o la consulta al proveedor decide el estado final.
+  if (payment.rows[0] && payment.rows[0].payment_method !== "mercadopago") await failPendingPayment(payment.rows[0].id);
   return NextResponse.json({ ok: true });
 }

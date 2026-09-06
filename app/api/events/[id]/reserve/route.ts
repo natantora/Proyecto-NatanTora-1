@@ -28,7 +28,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (event.seating_mode === "none") throw new Error("NO_RESERVATIONS");
       if (!event.published || !event.reservations_open) throw new Error("RESERVATIONS_CLOSED");
       const defaultUnitPrice = Number(event.seat_price ?? 0);
-      const holdMinutes = useMercadoPago ? 10 : 30;
+      // Mercado Pago puede tardar algunos minutos en entregar la aprobación.
+      // El lugar se conserva un poco más que la vigencia del checkout para
+      // evitar que se libere durante una aprobación válida.
+      const holdMinutes = useMercadoPago ? 35 : 30;
 
       const existing = await client.query(
         `SELECT id FROM event_reservations WHERE event_id = $1 AND user_id = $2
@@ -106,7 +109,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     if (result.paymentId) {
       if (useMercadoPago) {
-        const preference = await createMercadoPagoPreference({ paymentId: result.paymentId, title: result.event.title, description: result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre", amount: result.total, email: user.email, kind: "event", returnPath: `/eventos/${eventId}`, expirationMinutes: 10 });
+        const preference = await createMercadoPagoPreference({ paymentId: result.paymentId, title: result.event.title, description: result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre", amount: result.total, email: user.email, kind: "event", returnPath: `/eventos/${eventId}`, expirationMinutes: 30 });
         await query("UPDATE payments SET mercadopago_preference_id = $2, provider_status = 'pending', provider_updated_at = NOW(), updated_at = NOW() WHERE id = $1", [result.paymentId, preference.id]);
         return NextResponse.json({ ok: true, requiresPayment: true, url: preference.url, provider: "mercadopago" });
       }
@@ -152,12 +155,15 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
   const body = await req.json().catch(() => ({}));
   const paymentId = typeof body.payment_id === "string" ? body.payment_id : "";
   if (!paymentId) return NextResponse.json({ error: "Pago inválido" }, { status: 400 });
-  const owned = await query<{ id: string; stripe_session_id: string | null }>(
-    `SELECT id, stripe_session_id FROM payments WHERE id = $1 AND user_id = $2 AND status = 'pending'
+  const owned = await query<{ id: string; stripe_session_id: string | null; payment_method: string | null }>(
+    `SELECT id, stripe_session_id, payment_method FROM payments WHERE id = $1 AND user_id = $2 AND status = 'pending'
       AND metadata->>'kind' = 'event' AND metadata->>'event_id' = $3 LIMIT 1`,
     [paymentId, user.id, eventId],
   );
   if (!owned.rows[0]) return NextResponse.json({ ok: true });
+  if (owned.rows[0].payment_method === "mercadopago") {
+    return NextResponse.json({ ok: true, pending: true, message: "Estamos confirmando el estado con Mercado Pago." });
+  }
   if (owned.rows[0].stripe_session_id) {
     await stripeClient().checkout.sessions.expire(owned.rows[0].stripe_session_id).catch((error) => {
       console.error("[events/reserve] checkout expiration failed:", error);

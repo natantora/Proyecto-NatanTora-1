@@ -65,10 +65,12 @@ export async function reconcileMercadoPagoPayment(paymentId: string, remote: Mer
 }
 
 export async function finalizeMercadoPagoPayment(paymentId: string, providerPaymentId: string): Promise<boolean> {
-  const payment = await query<{ metadata: Record<string, unknown>; payment_method: string | null }>(
-    "SELECT metadata, payment_method FROM payments WHERE id = $1 LIMIT 1",
+  const payment = await query<{ status: string; metadata: Record<string, unknown>; payment_method: string | null }>(
+    "SELECT status, metadata, payment_method FROM payments WHERE id = $1 LIMIT 1",
     [paymentId],
   );
+  if (payment.rows[0]?.status === "paid") return true;
+  if (["refunded", "charged_back"].includes(payment.rows[0]?.status || "")) return false;
   const kind = payment.rows[0]?.metadata?.kind as PaymentKind | undefined;
   if (!kind || !["billing", "donation", "event"].includes(kind)) return false;
   await query(
@@ -108,29 +110,88 @@ export async function finalizeMercadoPagoPayment(paymentId: string, providerPaym
 
   if (kind === "event") {
     const result = await transaction(async (client) => {
-      const updated = await client.query("UPDATE payments SET status = 'paid', paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE id = $1 AND status = 'pending' RETURNING id", [paymentId]);
-      if (!updated.rowCount) return null;
-      await client.query("UPDATE event_reservations SET status = 'confirmed', expires_at = NULL WHERE payment_id = $1 AND status = 'pending'", [paymentId]);
-      await recordFinancialAudit(client, { action: "payment.approved", entityType: "payment", entityId: paymentId, metadata: { provider: "mercadopago", kind: "event" } });
-      const rows = await client.query<{ email: string; member_name: string; event_id: string; event_title: string; event_date: Date; location: string | null; row_label: string | null; seat_number: number | null; x: number | null; unit_price: string }>(
-        `SELECT reservation.holder_email AS email, reservation.holder_name AS member_name,
+      const lockedPayment = await client.query<{ status: string; metadata: Record<string, unknown> }>(
+        "SELECT status, metadata FROM payments WHERE id = $1 FOR UPDATE",
+        [paymentId],
+      );
+      if (!lockedPayment.rows[0]) return { state: "missing" as const, eventId: null, seatIds: [] as string[] };
+      if (lockedPayment.rows[0].status === "paid") return { state: "already-paid" as const };
+      if (["refunded", "charged_back"].includes(lockedPayment.rows[0].status)) return { state: "reversed" as const };
+
+      const eventId = typeof lockedPayment.rows[0].metadata?.event_id === "string" ? lockedPayment.rows[0].metadata.event_id : null;
+      const event = eventId
+        ? await client.query<{ id: string; seating_mode: string; capacity: number | null }>(
+          "SELECT id, seating_mode, capacity FROM events WHERE id = $1 FOR UPDATE",
+          [eventId],
+        )
+        : null;
+      const rows = await client.query<{ id: string; seat_id: string | null; email: string; member_name: string; event_id: string; event_title: string; event_date: Date; location: string | null; row_label: string | null; seat_number: number | null; x: number | null; unit_price: string }>(
+        `SELECT reservation.id, reservation.seat_id, reservation.holder_email AS email, reservation.holder_name AS member_name,
                 event.id AS event_id, event.title AS event_title, event.event_date, event.location,
                 seat.row_label, seat.seat_number, seat.x, reservation.unit_price::text
            FROM event_reservations reservation JOIN events event ON event.id = reservation.event_id
       LEFT JOIN event_seats seat ON seat.id = reservation.seat_id WHERE reservation.payment_id = $1
-          ORDER BY seat.row_label, seat.seat_number`, [paymentId]);
-      if (!rows.rowCount) return null;
+          ORDER BY seat.row_label, seat.seat_number FOR UPDATE OF reservation`, [paymentId]);
+      const seatIds = rows.rows.map((row) => row.seat_id).filter((id): id is string => Boolean(id));
+      let conflicts: string[] = [];
+      if (event?.rows[0]?.seating_mode === "assigned" && seatIds.length) {
+        const occupied = await client.query<{ seat_id: string }>(
+          `SELECT DISTINCT seat_id
+             FROM event_reservations
+            WHERE event_id = $2 AND seat_id = ANY($3::uuid[]) AND payment_id IS DISTINCT FROM $1
+              AND (status = 'confirmed' OR (status = 'pending' AND expires_at > NOW()))`,
+          [paymentId, eventId, seatIds],
+        );
+        conflicts = occupied.rows.map((row) => row.seat_id);
+      } else if (event?.rows[0]?.seating_mode === "open" && rows.rowCount) {
+        const active = await client.query<{ count: string }>(
+          `SELECT COUNT(*)::text AS count FROM event_reservations
+            WHERE event_id = $1 AND payment_id IS DISTINCT FROM $2
+              AND (status = 'confirmed' OR (status = 'pending' AND expires_at > NOW()))`,
+          [eventId, paymentId],
+        );
+        if (Number(active.rows[0]?.count || 0) + rows.rows.length > Number(event.rows[0].capacity || 0)) conflicts = ["CAPACITY"];
+      }
+
+      await client.query(
+        "UPDATE payments SET status = 'paid', paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE id = $1 AND status IN ('pending', 'failed')",
+        [paymentId],
+      );
+      if (!event?.rows[0] || !rows.rowCount || conflicts.length) {
+        await recordFinancialAudit(client, {
+          action: "payment.approved_with_reservation_conflict",
+          entityType: "payment",
+          entityId: paymentId,
+          metadata: { provider: "mercadopago", kind: "event", event_id: eventId, seat_ids: seatIds, conflicts },
+        });
+        return { state: "conflict" as const, eventId, seatIds, conflicts };
+      }
+
+      await client.query("UPDATE event_reservations SET status = 'confirmed', expires_at = NULL WHERE payment_id = $1 AND status IN ('pending', 'expired', 'cancelled')", [paymentId]);
+      if (seatIds.length) await client.query("UPDATE event_seats SET status = 'occupied' WHERE id = ANY($1::uuid[])", [seatIds]);
+      await recordFinancialAudit(client, { action: "payment.approved", entityType: "payment", entityId: paymentId, metadata: { provider: "mercadopago", kind: "event" } });
       const first = rows.rows[0];
-      return { email: first.email, memberName: first.member_name, eventId: first.event_id, eventTitle: first.event_title, eventDate: first.event_date, location: first.location || "Midrash Natán Torá", seats: rows.rows.map((row) => row.row_label ? (row.x !== null ? row.row_label : `${row.row_label}${row.seat_number || ""}`) : "Lugar libre"), quantity: rows.rows.length, total: rows.rows.reduce((sum, row) => sum + Number(row.unit_price), 0) };
+      return { state: "confirmed" as const, email: first.email, memberName: first.member_name, eventId: first.event_id, eventTitle: first.event_title, eventDate: first.event_date, location: first.location || "Midrash Natán Torá", seats: rows.rows.map((row) => row.row_label ? (row.x !== null ? row.row_label : `${row.row_label}${row.seat_number || ""}`) : "Lugar libre"), quantity: rows.rows.length, total: rows.rows.reduce((sum, row) => sum + Number(row.unit_price), 0) };
     });
-    if (result) { const delivery = await sendReservationConfirmation(result); if (!delivery.ok) await reportEmailFailure("Confirmación de reservación", delivery.error, paymentId); }
-    return Boolean(result);
+    if (result.state === "conflict" || result.state === "missing") {
+      await reportSystemAlert({
+        severity: "critical",
+        category: "payments",
+        title: "Pago aprobado requiere asignación manual",
+        message: `Mercado Pago aprobó ${paymentId}, pero la reservación no pudo confirmarse automáticamente porque el lugar ya no está disponible o faltan datos. No se duplicó ningún asiento.`,
+        fingerprint: `payment:reservation-conflict:${paymentId}`,
+        context: { payment_id: paymentId, provider_payment_id: providerPaymentId, event_id: result.eventId, seat_ids: result.seatIds, conflicts: "conflicts" in result ? result.conflicts : [] },
+      });
+      return true;
+    }
+    if (result.state === "confirmed") { const delivery = await sendReservationConfirmation(result); if (!delivery.ok) await reportEmailFailure("Confirmación de reservación", delivery.error, paymentId); }
+    return result.state === "confirmed" || result.state === "already-paid";
   }
 
   const data = await transaction(async (client) => {
     const donation = await client.query<{ donor_email: string | null; donor_name: string | null; amount: string; description: string | null; paid_at: Date | null }>(
       `UPDATE payments SET status = 'paid', paid_at = COALESCE(paid_at, NOW()), updated_at = NOW()
-        WHERE id = $1 AND status = 'pending'
+        WHERE id = $1 AND status IN ('pending', 'failed')
         RETURNING donor_email, donor_name, amount::text, description, paid_at`, [paymentId]);
     if (donation.rows[0]) await recordFinancialAudit(client, { action: "payment.approved", entityType: "payment", entityId: paymentId, metadata: { provider: "mercadopago", kind: "donation" } });
     return donation.rows[0];
