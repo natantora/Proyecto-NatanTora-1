@@ -59,6 +59,24 @@ export default function InteractiveSeatPlan({
     onSelect(seat.id);
   }
 
+  // SVG uses paint order for pointer targeting. Draw unavailable seats first so
+  // their overlapping touch areas cannot cover available seats. Seat 100 is in
+  // an especially tight part of the real plan, so keep its target above the
+  // other available targets without changing its saved position or number.
+  const renderedSeats = seats
+    .map((seat, index) => ({ seat, index }))
+    .sort((a, b) => {
+      const priority = (seat: SeatPlanSeat) => {
+        const selected = selectedSeatId === seat.id || selectedSeatIds?.includes(seat.id) === true;
+        if (selected) return 3;
+        if (seat.row_label === "100" && seat.status === "available") return 2;
+        if (seat.status === "available") return 1;
+        return 0;
+      };
+      return priority(a.seat) - priority(b.seat) || a.index - b.index;
+    })
+    .map(({ seat }) => seat);
+
   return (
     <div className="overflow-hidden rounded-xl border border-midrash-200 bg-white">
       <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-midrash-100 bg-midrash-50/95 px-3 py-2 backdrop-blur sm:justify-end">
@@ -112,7 +130,7 @@ export default function InteractiveSeatPlan({
             </>
           )}
 
-          {seats.map((seat) => {
+          {renderedSeats.map((seat) => {
             if (seat.x === null || seat.y === null) return null;
             const occupied = seat.status === "occupied";
             const selected = selectedSeatId === seat.id || selectedSeatIds?.includes(seat.id) === true;
@@ -138,6 +156,7 @@ export default function InteractiveSeatPlan({
                     if (canSelect && (event.key === "Enter" || event.key === " ")) selectSeat(seat);
                   }}
                   className={canSelect ? "cursor-pointer" : "cursor-not-allowed"}
+                  pointerEvents={canSelect ? undefined : "none"}
                 >
                   <title>{label}</title>
                   <rect
@@ -171,6 +190,7 @@ export default function InteractiveSeatPlan({
                   if (canSelect && (event.key === "Enter" || event.key === " ")) selectSeat(seat);
                 }}
                 className={`${canSelect ? "group cursor-pointer" : "cursor-not-allowed"} focus:outline-none`}
+                pointerEvents={canSelect ? undefined : "none"}
               >
                 <title>{label}</title>
                 <rect x={seat.x - 15} y={seat.y - 15} width={30} height={30} fill="transparent" />
