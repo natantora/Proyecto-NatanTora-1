@@ -16,10 +16,12 @@ type PrintSeat = { id: string; row_label: string; seat_number: number; status: "
 type Region = { name: string; viewBox: [number, number, number, number] };
 
 const DETAIL_REGIONS: Region[] = [
-  { name: "Zona superior izquierda", viewBox: [0, 0, 500, 325] },
-  { name: "Zona superior derecha", viewBox: [500, 0, 500, 325] },
-  { name: "Zona inferior izquierda", viewBox: [0, 325, 500, 325] },
-  { name: "Zona inferior derecha", viewBox: [500, 325, 500, 325] },
+  { name: "Zona superior izquierda", viewBox: [0, 0, CANVAS_W / 3, CANVAS_H / 2] },
+  { name: "Zona superior central", viewBox: [CANVAS_W / 3, 0, CANVAS_W / 3, CANVAS_H / 2] },
+  { name: "Zona superior derecha", viewBox: [(CANVAS_W / 3) * 2, 0, CANVAS_W / 3, CANVAS_H / 2] },
+  { name: "Zona inferior izquierda", viewBox: [0, CANVAS_H / 2, CANVAS_W / 3, CANVAS_H / 2] },
+  { name: "Zona inferior central", viewBox: [CANVAS_W / 3, CANVAS_H / 2, CANVAS_W / 3, CANVAS_H / 2] },
+  { name: "Zona inferior derecha", viewBox: [(CANVAS_W / 3) * 2, CANVAS_H / 2, CANVAS_W / 3, CANVAS_H / 2] },
 ];
 
 export default async function PrintableSeatingChartPage({ params }: { params: Promise<{ id: string }> }) {
@@ -51,7 +53,7 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
     getEventVenueTables(id),
   ]);
   const seats = seatResult.rows.filter((seat) => seat.x !== null && seat.y !== null);
-  const occupied = seats.filter((seat) => seat.status === "occupied" || seat.holder_name);
+  const occupied = seats.filter((seat) => seat.status === "occupied" || seat.holder_name).sort(compareSeats);
   const regions: Region[] = [{ name: "Vista general", viewBox: [0, 0, CANVAS_W, CANVAS_H] }, ...DETAIL_REGIONS];
 
   return <main>
@@ -68,9 +70,9 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
             <div className={styles.pageName}>{region.name}<br />Hoja {index + 1} de {regions.length}</div>
           </header>
           <SeatChart event={event} seats={seats} occupied={regionSeats} tables={venueTables} region={region} overview={index === 0} />
-          <div className={styles.legend}><span className={styles.legendItem}><span className={styles.dot} /> Asiento reservado</span><span>El nombre abreviado aparece junto al lugar; la lista inferior conserva el nombre completo.</span></div>
+          <div className={styles.legend}><span className={styles.legendItem}><span className={styles.dot} /> Asiento reservado</span><span>El número dentro de cada marca corresponde al nombre completo de la lista inferior.</span></div>
           <h2 className={styles.listTitle}>{index === 0 ? `Resumen · ${occupied.length} lugares ocupados` : `Personas en esta zona · ${regionSeats.length}`}</h2>
-          {regionSeats.length ? <div className={styles.roster}>{regionSeats.map((seat) => <div className={styles.rosterItem} key={seat.id}><span className={styles.seatCode}>{seat.row_label}</span><span className={styles.personName}>{seat.holder_name || "Ocupado"}{seat.reservation_status === "pending" ? " · pago pendiente" : ""}</span></div>)}</div> : <p className={styles.empty}>No hay lugares reservados en esta zona.</p>}
+          {regionSeats.length ? <div className={styles.roster}>{regionSeats.sort(compareSeats).map((seat) => <div className={styles.rosterItem} key={seat.id}><span className={styles.seatCode}>{seat.row_label}</span><span className={styles.personName}>{seat.holder_name || "Ocupado"}</span>{seat.reservation_status === "pending" ? <span className={styles.pending}>Pendiente</span> : null}</div>)}</div> : <p className={styles.empty}>No hay lugares reservados en esta zona.</p>}
         </section>;
       })}
     </div>
@@ -82,25 +84,19 @@ function SeatChart({ event, seats, occupied, tables, region, overview }: { event
   const visibleSeats = seats.filter((seat) => isInside(seat, region.viewBox));
   return <svg className={styles.plan} viewBox={`${x} ${y} ${width} ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={`${region.name} con nombres de personas reservadas`}>
     {event.seat_plan_type === "architectural" ? <image href="/venue-plan-reference.png" x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="none" /> : <><CustomPlanFloorZone /><Furniture tables={tables} /></>}
-    {visibleSeats.map((seat) => seat.x !== null && seat.y !== null ? <circle key={`seat-${seat.id}`} cx={seat.x} cy={seat.y} r={overview ? 3.4 : 4.2} fill={seat.status === "occupied" ? "#8f2027" : "rgba(255,255,255,.72)"} stroke={seat.status === "occupied" ? "#5f1116" : "#9b7620"} strokeWidth={overview ? 1 : 1.4} /> : null)}
-    {occupied.map((seat, index) => <SeatName key={seat.id} seat={seat} index={index} overview={overview} region={region.viewBox} />)}
+    {visibleSeats.filter((seat) => !(seat.status === "occupied" || seat.holder_name)).map((seat) => seat.x !== null && seat.y !== null ? <circle key={`seat-${seat.id}`} cx={seat.x} cy={seat.y} r={overview ? 2.8 : 4} fill="rgba(255,255,255,.78)" stroke="#9b7620" strokeWidth={overview ? .8 : 1.2} /> : null)}
+    {occupied.map((seat) => <ReservedSeatMarker key={seat.id} seat={seat} overview={overview} />)}
   </svg>;
 }
 
-function SeatName({ seat, index, overview, region }: { seat: PrintSeat; index: number; overview: boolean; region: Region["viewBox"] }) {
+function ReservedSeatMarker({ seat, overview }: { seat: PrintSeat; overview: boolean }) {
   if (seat.x === null || seat.y === null) return null;
-  const name = shortName(seat.holder_name || "Ocupado");
-  const fontSize = overview ? 5.5 : 7;
-  const boxHeight = overview ? 9 : 11;
-  const boxWidth = Math.max(overview ? 30 : 42, name.length * (overview ? 3.2 : 4.1) + 8);
-  const placeLeft = index % 2 === 1;
-  const desiredX = placeLeft ? seat.x - boxWidth - 8 : seat.x + 8;
-  const labelX = Math.max(region[0] + 2, Math.min(desiredX, region[0] + region[2] - boxWidth - 2));
-  const labelY = Math.max(region[1] + boxHeight + 2, Math.min(seat.y - 7, region[1] + region[3] - 3));
+  if (overview) return <circle cx={seat.x} cy={seat.y} r={3.4} fill="#9f252b" stroke="#68151a" strokeWidth={1} />;
+  const code = seat.row_label;
+  const width = Math.max(13, code.length * 4.6 + 5);
   return <g>
-    <line x1={seat.x} y1={seat.y} x2={placeLeft ? labelX + boxWidth : labelX} y2={labelY - boxHeight / 2} stroke="#7f1d1d" strokeWidth={overview ? .7 : 1} />
-    <rect x={labelX} y={labelY - boxHeight} width={boxWidth} height={boxHeight} rx={2} fill="#fffdf7" stroke="#7f1d1d" strokeWidth={overview ? .7 : 1} />
-    <text x={labelX + 3} y={labelY - (overview ? 2.7 : 3.2)} fontFamily="Arial, sans-serif" fontSize={fontSize} fontWeight="700" fill="#132746">{name}</text>
+    <rect x={seat.x - width / 2} y={seat.y - 5.5} width={width} height={11} rx={3} fill="#9f252b" stroke="#68151a" strokeWidth={1} />
+    <text x={seat.x} y={seat.y + .4} textAnchor="middle" dominantBaseline="middle" fontFamily="Arial, sans-serif" fontSize="5.8" fontWeight="700" fill="#ffffff">{code}</text>
   </g>;
 }
 
@@ -114,8 +110,9 @@ function isInside(seat: PrintSeat, [x, y, width, height]: Region["viewBox"]) {
   return seat.x !== null && seat.y !== null && seat.x >= x && seat.x <= x + width && seat.y >= y && seat.y <= y + height;
 }
 
-function shortName(value: string) {
-  const parts = value.trim().split(/\s+/).filter(Boolean);
-  const short = parts.length > 2 ? `${parts[0]} ${parts.at(-1)}` : parts.join(" ");
-  return short.length > 18 ? `${short.slice(0, 17)}…` : short;
+function compareSeats(a: PrintSeat, b: PrintSeat) {
+  const aNumber = Number(a.row_label);
+  const bNumber = Number(b.row_label);
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber || a.seat_number - b.seat_number;
+  return a.row_label.localeCompare(b.row_label, "es", { numeric: true }) || a.seat_number - b.seat_number;
 }
