@@ -124,6 +124,9 @@ export default function InteractiveSeatPlan({
             if (planType === "custom") {
               const fill = selected ? "#d7b35a" : occupied ? "#7f1d1d" : "#ffffff";
               const stroke = selected ? "#9b7620" : occupied ? "#7f1d1d" : "#132746";
+              // El asiento 100 queda muy cerca de otros elementos del plano.
+              // Ampliamos solamente su zona táctil, sin moverlo ni alterar sus datos.
+              const touchTargetSize = seat.row_label === "100" ? 44 : 30;
               return (
                 <g
                   key={seat.id}
@@ -137,7 +140,13 @@ export default function InteractiveSeatPlan({
                   className={canSelect ? "cursor-pointer" : "cursor-not-allowed"}
                 >
                   <title>{label}</title>
-                  <rect x={seat.x - 15} y={seat.y - 15} width={30} height={30} fill="transparent" />
+                  <rect
+                    x={seat.x - touchTargetSize / 2}
+                    y={seat.y - touchTargetSize / 2}
+                    width={touchTargetSize}
+                    height={touchTargetSize}
+                    fill="transparent"
+                  />
                   <g transform={`rotate(${seat.rotation} ${seat.x} ${seat.y})`}>
                     <rect x={seat.x - 9} y={seat.y - 10} width={18} height={3.5} rx={1} fill={fill} stroke={stroke} strokeWidth={selected ? 2 : 1.2} />
                     <rect x={seat.x - 8} y={seat.y - 7} width={16} height={16} rx={2.5} fill={fill} stroke={stroke} strokeWidth={selected ? 2 : 1.2} />
