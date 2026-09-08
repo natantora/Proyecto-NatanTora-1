@@ -10,6 +10,7 @@ import {
   canManagePayments,
   canManageBilling,
   canManageMembers,
+  canManageAliyot,
   canManageSeats,
   canReviewClasses,
   ROLE_LABEL,
@@ -93,6 +94,11 @@ export default async function AdminLayout({
       href: "/admin/schedules",
       label: "Horarios",
       show: canEditHorarios(role),
+    },
+    {
+      href: "/admin/aliyot",
+      label: "Registro de aliyot",
+      show: canManageAliyot(role),
     },
     {
       href: "/admin/reservations",

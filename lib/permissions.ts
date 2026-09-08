@@ -98,6 +98,11 @@ export function canManageMembers(role: Role | null | undefined): boolean {
   return role === "admin" || role === "owner";
 }
 
+/** Registrar aliyot y sus donativos asociados */
+export function canManageAliyot(role: Role | null | undefined): boolean {
+  return role === "admin" || role === "owner";
+}
+
 /** Cambiar el rol de otros usuarios (asignar admin/editor/rabino) */
 export function canPromoteUsers(role: Role | null | undefined): boolean {
   return role === "owner";
