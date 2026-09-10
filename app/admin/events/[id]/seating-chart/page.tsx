@@ -74,10 +74,10 @@ function ReservedSeatMarker({ seat }: { seat: PrintSeat }) {
   const seatX = seat.x;
   const seatY = seat.y;
 
-  // Fit every real name inside its chair footprint. Wrapping and sizing are
-  // calculated per name so labels cannot extend into neighboring seats.
+  // Keep the complete holder name in the reservation, but use a compact print
+  // label when necessary so every label remains legible inside its chair.
   const name = (seat.holder_name || "Ocupado").trim().replace(/\s+/g, " ").toLocaleUpperCase("es-MX");
-  const lines = splitPlanName(name);
+  const lines = compactPlanName(name);
   const fontSize = planNameFontSize(lines);
   const lineHeight = fontSize * .92;
   const firstLineY = seatY - ((lines.length - 1) * lineHeight) / 2;
@@ -102,9 +102,43 @@ function ReservedSeatMarker({ seat }: { seat: PrintSeat }) {
   </g>;
 }
 
+const PRINT_NAME_OVERRIDES: Record<string, string[]> = {
+  "ANITA CHAYO CHALOM": ["ANITA", "CHAYO C."],
+  "CARLOS CHAYO COHEN": ["CARLOS", "CHAYO C."],
+  "MARCOS MICHAN ASQUENAZI": ["MARCOS", "MICHAN A."],
+  "MICHAN ASQUENAZI": ["MICHAN", "ASQ."],
+  "SUSY ESQUENAZI": ["SUSY", "ESQ."],
+  "LUGARES HOMBRES": ["HOMBRES"],
+};
+
+function compactPlanName(name: string): string[] {
+  const override = PRINT_NAME_OVERRIDES[name];
+  if (override) return override;
+
+  if (name.includes("/")) {
+    const parts = name.split("/").map((part) => part.trim()).filter(Boolean);
+    if (parts.length > 1) return parts.slice(0, 2);
+  }
+
+  const lines = splitPlanName(name);
+  if (Math.max(...lines.map((line) => line.length), 0) <= 10) return lines;
+
+  const words = name.split(" ");
+  if (words.length >= 3) {
+    return [words[0], `${words[1]} ${words.slice(2).map((word) => `${word[0]}.`).join("")}`];
+  }
+  if (words.length === 2) {
+    const [first, last] = words;
+    return first.length >= last.length
+      ? [`${first.slice(0, 7)}.`, last]
+      : [first, `${last.slice(0, 7)}.`];
+  }
+  return [`${name.slice(0, 9)}.`];
+}
+
 function splitPlanName(name: string): string[] {
   const words = name.split(" ");
-  const maxLines = name.length > 30 ? 4 : name.length > 17 ? 3 : 2;
+  const maxLines = 2;
   const targetLength = Math.ceil((name.length - Math.max(words.length - 1, 0)) / maxLines);
   const lines: string[] = [];
   for (const word of words) {
@@ -121,7 +155,7 @@ function splitPlanName(name: string): string[] {
 
 function planNameFontSize(lines: string[]): number {
   const longestLine = Math.max(...lines.map((line) => line.length), 1);
-  const fitWidth = 16.5 / (longestLine * .56);
+  const fitWidth = 17.5 / (longestLine * .45);
   const fitHeight = 14 / (lines.length * .92);
   return Math.min(5.2, fitWidth, fitHeight);
 }
