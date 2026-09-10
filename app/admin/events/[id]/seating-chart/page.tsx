@@ -15,15 +15,6 @@ type EventRecord = { id: string; title: string; event_date: Date; location: stri
 type PrintSeat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number; holder_name: string | null; reservation_status: string | null };
 type Region = { name: string; viewBox: [number, number, number, number] };
 
-const DETAIL_REGIONS: Region[] = [
-  { name: "Zona superior izquierda", viewBox: [0, 0, CANVAS_W / 3, CANVAS_H / 2] },
-  { name: "Zona superior central", viewBox: [CANVAS_W / 3, 0, CANVAS_W / 3, CANVAS_H / 2] },
-  { name: "Zona superior derecha", viewBox: [(CANVAS_W / 3) * 2, 0, CANVAS_W / 3, CANVAS_H / 2] },
-  { name: "Zona inferior izquierda", viewBox: [0, CANVAS_H / 2, CANVAS_W / 3, CANVAS_H / 2] },
-  { name: "Zona inferior central", viewBox: [CANVAS_W / 3, CANVAS_H / 2, CANVAS_W / 3, CANVAS_H / 2] },
-  { name: "Zona inferior derecha", viewBox: [(CANVAS_W / 3) * 2, CANVAS_H / 2, CANVAS_W / 3, CANVAS_H / 2] },
-];
-
 export default async function PrintableSeatingChartPage({ params }: { params: Promise<{ id: string }> }) {
   const admin = await getCurrentUser();
   if (!admin || admin.status !== "approved" || !canManageSeats(admin.role as Role)) redirect("/admin/dashboard");
@@ -54,7 +45,7 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
   ]);
   const seats = seatResult.rows.filter((seat) => seat.x !== null && seat.y !== null);
   const occupied = seats.filter((seat) => seat.status === "occupied" || seat.holder_name).sort(compareSeats);
-  const regions: Region[] = [{ name: "Vista general", viewBox: [0, 0, CANVAS_W, CANVAS_H] }, ...DETAIL_REGIONS];
+  const region: Region = { name: "Vista general", viewBox: [0, 0, CANVAS_W, CANVAS_H] };
 
   return <main>
     <div className={styles.screenBar}>
@@ -62,43 +53,38 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
       <PrintButton />
     </div>
     <div className={styles.document}>
-      {regions.map((region, index) => {
-        const regionSeats = occupied.filter((seat) => isInside(seat, region.viewBox));
-        return <section className={styles.sheet} key={region.name}>
+      <section className={styles.sheet}>
           <header className={styles.header}>
             <div><p className={styles.eyebrow}>Plano de lugares reservados</p><h1 className={styles.title}>{event.title}</h1><p className={styles.meta}>{new Date(event.event_date).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" })} · {event.location || "Midrash Natán Torá"}</p></div>
-            <div className={styles.pageName}>{region.name}<br />Hoja {index + 1} de {regions.length}</div>
+            <div className={styles.pageName}>{occupied.length} lugares reservados<br />Una sola hoja</div>
           </header>
-          <SeatChart event={event} occupied={regionSeats} tables={venueTables} region={region} overview={index === 0} />
-          <div className={styles.legend}><span>Los nombres reales aparecen directamente sobre el plano, en la posición y orientación de cada lugar. La lista inferior permite localizar cada número.</span></div>
-          <h2 className={styles.listTitle}>{index === 0 ? `Resumen · ${occupied.length} lugares ocupados` : `Personas en esta zona · ${regionSeats.length}`}</h2>
-          {regionSeats.length ? <div className={styles.roster}>{regionSeats.sort(compareSeats).map((seat) => <div className={styles.rosterItem} key={seat.id}><span className={styles.seatCode}>{seat.row_label}</span><span className={styles.personName}>{seat.holder_name || "Ocupado"}</span>{seat.reservation_status === "pending" ? <span className={styles.pending}>Pendiente</span> : null}</div>)}</div> : <p className={styles.empty}>No hay lugares reservados en esta zona.</p>}
-        </section>;
-      })}
+          <SeatChart event={event} occupied={occupied} tables={venueTables} region={region} />
+          <div className={styles.legend}><span>Nombres reales colocados directamente en cada lugar.</span></div>
+      </section>
     </div>
   </main>;
 }
 
-function SeatChart({ event, occupied, tables, region, overview }: { event: EventRecord; occupied: PrintSeat[]; tables: VenueTable[]; region: Region; overview: boolean }) {
+function SeatChart({ event, occupied, tables, region }: { event: EventRecord; occupied: PrintSeat[]; tables: VenueTable[]; region: Region }) {
   const [x, y, width, height] = region.viewBox;
   return <svg className={styles.plan} viewBox={`${x} ${y} ${width} ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={`${region.name} con nombres de personas reservadas`}>
     <image href="/venue-plan-reference.png" x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="none" />
     {event.seat_plan_type === "custom" ? <><CustomPlanFloorZone opacity={0.2} /><Furniture tables={tables} /></> : null}
-    {occupied.map((seat) => <ReservedSeatMarker key={seat.id} seat={seat} overview={overview} />)}
+    {occupied.map((seat) => <ReservedSeatMarker key={seat.id} seat={seat} />)}
   </svg>;
 }
 
-function ReservedSeatMarker({ seat, overview }: { seat: PrintSeat; overview: boolean }) {
+function ReservedSeatMarker({ seat }: { seat: PrintSeat }) {
   if (seat.x === null || seat.y === null) return null;
 
   // The 2025 reference plan prints the real name directly beside each chair:
   // no dot, callout line, badge or colored box.
   const labelAngle = readableAngle(seat.rotation + 90);
   const offsetAngle = ((seat.rotation + 90) * Math.PI) / 180;
-  const labelX = seat.x + Math.cos(offsetAngle) * (overview ? 5 : 7);
-  const labelY = seat.y + Math.sin(offsetAngle) * (overview ? 5 : 7);
+  const labelX = seat.x + Math.cos(offsetAngle) * 7;
+  const labelY = seat.y + Math.sin(offsetAngle) * 7;
   const name = (seat.holder_name || "Ocupado").trim().replace(/\s+/g, " ").toLocaleUpperCase("es-MX");
-  const fontSize = planNameFontSize(name, overview);
+  const fontSize = planNameFontSize(name);
   return <text
       x={labelX}
       y={labelY}
@@ -107,16 +93,16 @@ function ReservedSeatMarker({ seat, overview }: { seat: PrintSeat; overview: boo
       dominantBaseline="middle"
       fontFamily="Arial Narrow, Arial, sans-serif"
       fontSize={fontSize}
-      fontWeight="400"
+      fontWeight="600"
       letterSpacing=".04"
-      fill="#6f7378"
+      fill="#252b35"
     >{name}</text>;
 }
 
-function planNameFontSize(name: string, overview: boolean): number {
-  const maximum = overview ? 2.8 : 4.4;
-  const minimum = overview ? 1.65 : 2.8;
-  const fitted = (overview ? 49 : 72) / Math.max(name.length, 1);
+function planNameFontSize(name: string): number {
+  const maximum = 7;
+  const minimum = 4.8;
+  const fitted = 112 / Math.max(name.length, 1);
   return Math.max(minimum, Math.min(maximum, fitted));
 }
 
@@ -130,10 +116,6 @@ function Furniture({ tables }: { tables: VenueTable[] }) {
   return <>{tables.map((table) => table.kind === "round"
     ? <circle key={table.id} cx={table.x} cy={table.y} r={table.width / 2} fill="#eee8da" stroke="#5d6776" />
     : <rect key={table.id} x={table.x - table.width / 2} y={table.y - table.height / 2} width={table.width} height={table.height} rx={table.kind === "wall" ? 0 : 3} transform={`rotate(${table.rotation} ${table.x} ${table.y})`} fill={table.kind === "wall" ? "#132746" : "#eee8da"} stroke="#5d6776" />)}</>;
-}
-
-function isInside(seat: PrintSeat, [x, y, width, height]: Region["viewBox"]) {
-  return seat.x !== null && seat.y !== null && seat.x >= x && seat.x <= x + width && seat.y >= y && seat.y <= y + height;
 }
 
 function compareSeats(a: PrintSeat, b: PrintSeat) {
