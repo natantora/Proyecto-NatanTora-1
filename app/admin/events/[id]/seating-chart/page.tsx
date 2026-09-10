@@ -69,8 +69,8 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
             <div><p className={styles.eyebrow}>Plano de lugares reservados</p><h1 className={styles.title}>{event.title}</h1><p className={styles.meta}>{new Date(event.event_date).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" })} · {event.location || "Midrash Natán Torá"}</p></div>
             <div className={styles.pageName}>{region.name}<br />Hoja {index + 1} de {regions.length}</div>
           </header>
-          <SeatChart event={event} seats={seats} occupied={regionSeats} tables={venueTables} region={region} overview={index === 0} />
-          <div className={styles.legend}><span className={styles.legendItem}><span className={styles.dot} /> Asiento reservado</span><span>Los nombres aparecen directamente junto a cada lugar, siguiendo la orientación de la fila. La lista inferior conserva el nombre completo.</span></div>
+          <SeatChart event={event} occupied={regionSeats} tables={venueTables} region={region} overview={index === 0} />
+          <div className={styles.legend}><span>Los nombres reales aparecen directamente sobre el plano, en la posición y orientación de cada lugar. La lista inferior permite localizar cada número.</span></div>
           <h2 className={styles.listTitle}>{index === 0 ? `Resumen · ${occupied.length} lugares ocupados` : `Personas en esta zona · ${regionSeats.length}`}</h2>
           {regionSeats.length ? <div className={styles.roster}>{regionSeats.sort(compareSeats).map((seat) => <div className={styles.rosterItem} key={seat.id}><span className={styles.seatCode}>{seat.row_label}</span><span className={styles.personName}>{seat.holder_name || "Ocupado"}</span>{seat.reservation_status === "pending" ? <span className={styles.pending}>Pendiente</span> : null}</div>)}</div> : <p className={styles.empty}>No hay lugares reservados en esta zona.</p>}
         </section>;
@@ -79,55 +79,45 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
   </main>;
 }
 
-function SeatChart({ event, seats, occupied, tables, region, overview }: { event: EventRecord; seats: PrintSeat[]; occupied: PrintSeat[]; tables: VenueTable[]; region: Region; overview: boolean }) {
+function SeatChart({ event, occupied, tables, region, overview }: { event: EventRecord; occupied: PrintSeat[]; tables: VenueTable[]; region: Region; overview: boolean }) {
   const [x, y, width, height] = region.viewBox;
-  const visibleSeats = seats.filter((seat) => isInside(seat, region.viewBox));
   return <svg className={styles.plan} viewBox={`${x} ${y} ${width} ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={`${region.name} con nombres de personas reservadas`}>
-    {event.seat_plan_type === "architectural" ? <image href="/venue-plan-reference.png" x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="none" /> : <><CustomPlanFloorZone /><Furniture tables={tables} /></>}
-    {visibleSeats.filter((seat) => !(seat.status === "occupied" || seat.holder_name)).map((seat) => seat.x !== null && seat.y !== null ? <circle key={`seat-${seat.id}`} cx={seat.x} cy={seat.y} r={overview ? 2.8 : 4} fill="rgba(255,255,255,.78)" stroke="#9b7620" strokeWidth={overview ? .8 : 1.2} /> : null)}
+    <image href="/venue-plan-reference.png" x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="none" />
+    {event.seat_plan_type === "custom" ? <><CustomPlanFloorZone opacity={0.2} /><Furniture tables={tables} /></> : null}
     {occupied.map((seat) => <ReservedSeatMarker key={seat.id} seat={seat} overview={overview} />)}
   </svg>;
 }
 
 function ReservedSeatMarker({ seat, overview }: { seat: PrintSeat; overview: boolean }) {
   if (seat.x === null || seat.y === null) return null;
-  if (overview) return <circle cx={seat.x} cy={seat.y} r={3.4} fill="#9f252b" stroke="#68151a" strokeWidth={1} />;
 
-  // The reference plans place each name directly beside its chair, without a
-  // callout box. Rotating the label perpendicular to the chair keeps dense
-  // rows legible and mirrors the way names are typeset on the 2025 plan.
+  // The 2025 reference plan prints the real name directly beside each chair:
+  // no dot, callout line, badge or colored box.
   const labelAngle = readableAngle(seat.rotation + 90);
   const offsetAngle = ((seat.rotation + 90) * Math.PI) / 180;
-  const labelX = seat.x + Math.cos(offsetAngle) * 7.5;
-  const labelY = seat.y + Math.sin(offsetAngle) * 7.5;
-  const name = compactPlanName(seat.holder_name || "Ocupado");
-  return <g>
-    <circle cx={seat.x} cy={seat.y} r={3.5} fill="#9f252b" stroke="#68151a" strokeWidth={.9} />
-    <line x1={seat.x} y1={seat.y} x2={labelX} y2={labelY} stroke="#a8a39a" strokeWidth={.65} />
-    <text
+  const labelX = seat.x + Math.cos(offsetAngle) * (overview ? 5 : 7);
+  const labelY = seat.y + Math.sin(offsetAngle) * (overview ? 5 : 7);
+  const name = (seat.holder_name || "Ocupado").trim().replace(/\s+/g, " ").toLocaleUpperCase("es-MX");
+  const fontSize = planNameFontSize(name, overview);
+  return <text
       x={labelX}
       y={labelY}
       transform={`rotate(${labelAngle} ${labelX} ${labelY})`}
-      textAnchor="start"
+      textAnchor="middle"
       dominantBaseline="middle"
-      fontFamily="Arial, sans-serif"
-      fontSize="4.6"
-      fontWeight="500"
-      letterSpacing=".12"
-      fill="#585f68"
-    >{name}</text>
-  </g>;
+      fontFamily="Arial Narrow, Arial, sans-serif"
+      fontSize={fontSize}
+      fontWeight="400"
+      letterSpacing=".04"
+      fill="#6f7378"
+    >{name}</text>;
 }
 
-function compactPlanName(value: string): string {
-  const normalized = value.trim().replace(/\s+/g, " ").toLocaleUpperCase("es-MX");
-  if (normalized.length <= 22) return normalized;
-  const parts = normalized.split(" ");
-  if (parts.length > 1) {
-    const firstAndLast = `${parts[0]} ${parts[parts.length - 1]}`;
-    if (firstAndLast.length <= 22) return firstAndLast;
-  }
-  return `${normalized.slice(0, 21).trimEnd()}…`;
+function planNameFontSize(name: string, overview: boolean): number {
+  const maximum = overview ? 2.8 : 4.4;
+  const minimum = overview ? 1.65 : 2.8;
+  const fitted = (overview ? 49 : 72) / Math.max(name.length, 1);
+  return Math.max(minimum, Math.min(maximum, fitted));
 }
 
 function readableAngle(value: number): number {
