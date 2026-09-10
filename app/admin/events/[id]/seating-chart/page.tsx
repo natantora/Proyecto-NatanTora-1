@@ -54,12 +54,7 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
     </div>
     <div className={styles.document}>
       <section className={styles.sheet}>
-          <header className={styles.header}>
-            <div><p className={styles.eyebrow}>Plano de lugares reservados</p><h1 className={styles.title}>{event.title}</h1><p className={styles.meta}>{new Date(event.event_date).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" })} · {event.location || "Midrash Natán Torá"}</p></div>
-            <div className={styles.pageName}>{occupied.length} lugares reservados<br />Una sola hoja</div>
-          </header>
           <SeatChart event={event} occupied={occupied} tables={venueTables} region={region} />
-          <div className={styles.legend}><span>Nombres reales colocados directamente en cada lugar.</span></div>
       </section>
     </div>
   </main>;
@@ -76,34 +71,59 @@ function SeatChart({ event, occupied, tables, region }: { event: EventRecord; oc
 
 function ReservedSeatMarker({ seat }: { seat: PrintSeat }) {
   if (seat.x === null || seat.y === null) return null;
+  const seatX = seat.x;
+  const seatY = seat.y;
 
-  // The 2025 reference plan prints the real name directly beside each chair:
-  // no dot, callout line, badge or colored box.
-  const labelAngle = readableAngle(seat.rotation + 90);
-  const offsetAngle = ((seat.rotation + 90) * Math.PI) / 180;
-  const labelX = seat.x + Math.cos(offsetAngle) * 7;
-  const labelY = seat.y + Math.sin(offsetAngle) * 7;
+  // Fit every real name inside its chair footprint. Wrapping and sizing are
+  // calculated per name so labels cannot extend into neighboring seats.
   const name = (seat.holder_name || "Ocupado").trim().replace(/\s+/g, " ").toLocaleUpperCase("es-MX");
-  const fontSize = planNameFontSize(name);
-  return <text
-      x={labelX}
-      y={labelY}
-      transform={`rotate(${labelAngle} ${labelX} ${labelY})`}
+  const lines = splitPlanName(name);
+  const fontSize = planNameFontSize(lines);
+  const lineHeight = fontSize * .92;
+  const firstLineY = seatY - ((lines.length - 1) * lineHeight) / 2;
+  const clipId = `seat-name-${seat.id}`;
+  return <g transform={`rotate(${readableAngle(seat.rotation)} ${seatX} ${seatY})`}>
+    <defs><clipPath id={clipId}><rect x={seatX - 9} y={seatY - 8} width={18} height={16} rx={1.5} /></clipPath></defs>
+    <text
+      x={seatX}
+      y={firstLineY}
       textAnchor="middle"
       dominantBaseline="middle"
       fontFamily="Arial Narrow, Arial, sans-serif"
       fontSize={fontSize}
-      fontWeight="600"
-      letterSpacing=".04"
-      fill="#252b35"
-    >{name}</text>;
+      fontWeight="700"
+      letterSpacing="0"
+      fill="#111827"
+      stroke="#ffffff"
+      strokeWidth={.55}
+      paintOrder="stroke"
+      clipPath={`url(#${clipId})`}
+    >{lines.map((line, index) => <tspan key={`${seat.id}-${index}`} x={seatX} y={firstLineY + index * lineHeight}>{line}</tspan>)}</text>
+  </g>;
 }
 
-function planNameFontSize(name: string): number {
-  const maximum = 7;
-  const minimum = 4.8;
-  const fitted = 112 / Math.max(name.length, 1);
-  return Math.max(minimum, Math.min(maximum, fitted));
+function splitPlanName(name: string): string[] {
+  const words = name.split(" ");
+  const maxLines = name.length > 30 ? 4 : name.length > 17 ? 3 : 2;
+  const targetLength = Math.ceil((name.length - Math.max(words.length - 1, 0)) / maxLines);
+  const lines: string[] = [];
+  for (const word of words) {
+    const current = lines[lines.length - 1];
+    if (!current || (lines.length < maxLines && current.length + 1 + word.length > targetLength)) lines.push(word);
+    else lines[lines.length - 1] = `${current} ${word}`;
+  }
+  while (lines.length > maxLines) {
+    const overflow = lines.pop();
+    if (overflow) lines[lines.length - 1] = `${lines[lines.length - 1]} ${overflow}`;
+  }
+  return lines;
+}
+
+function planNameFontSize(lines: string[]): number {
+  const longestLine = Math.max(...lines.map((line) => line.length), 1);
+  const fitWidth = 16.5 / (longestLine * .56);
+  const fitHeight = 14 / (lines.length * .92);
+  return Math.min(5.2, fitWidth, fitHeight);
 }
 
 function readableAngle(value: number): number {

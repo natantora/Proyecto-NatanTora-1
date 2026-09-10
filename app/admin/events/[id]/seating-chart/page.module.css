@@ -47,19 +47,11 @@
 .empty { margin-top: 8px; color: #857b6d; font-size: 11px; font-style: italic; }
 
 @media print {
-  @page { size: A4 landscape; margin: 4mm; }
+  @page { size: A4 portrait; margin: 0; }
   .screenBar { display: none !important; }
   .document { padding: 0; background: white; }
-  .sheet { width: 100%; min-height: 0; height: 202mm; margin: 0; padding: 4mm 5mm 3mm; box-shadow: none; overflow: hidden; break-after: auto; page-break-after: auto; }
-  .header { gap: 5mm; padding-bottom: 2mm; }
-  .eyebrow { font-size: 7pt; }
-  .title { margin-top: 1mm; font-size: 16pt; }
-  .meta { margin-top: 1mm; font-size: 8pt; }
-  .pageName { font-size: 8pt; }
-  .plan { height: 169mm; margin-top: 3mm; }
-  .legend { margin-top: 1.5mm; font-size: 7pt; }
-  .roster { gap: 1.5mm 5mm; font-size: 8pt; }
-  .rosterItem { grid-template-columns: 9mm minmax(0, 1fr) auto; padding-bottom: 1mm; }
+  .sheet { position: relative; width: 210mm; min-height: 0; height: 297mm; margin: 0; padding: 0; box-shadow: none; overflow: hidden; break-after: auto; page-break-after: auto; }
+  .plan { position: absolute; top: 50%; left: 50%; width: 297mm; height: 193mm; margin: 0; border: 0; transform: translate(-50%, -50%) rotate(90deg); transform-origin: center; }
 }
 
 @media (max-width: 700px) {
