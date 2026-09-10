@@ -45,13 +45,37 @@
 .personName { min-width: 0; color: #132746; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .pending { color: #9a7229; font-size: 7px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .empty { margin-top: 8px; color: #857b6d; font-size: 11px; font-style: italic; }
+.screenName { display: block; }
+.printName { display: none; }
 
 @media print {
   @page { size: A4 portrait; margin: 0; }
+  :global(body:has(.printPage) > header),
+  :global(body:has(.printPage) > footer),
+  :global(body:has(.printPage) [data-admin-toolbar]),
+  :global(body:has(.printPage) [data-admin-mobile-nav]),
+  :global(body:has(.printPage) [data-admin-sidebar]) { display: none !important; }
+  :global(body:has(.printPage)),
+  :global(body:has(.printPage) > main),
+  :global(body:has(.printPage) [data-admin-layout]),
+  :global(body:has(.printPage) [data-admin-shell]),
+  :global(body:has(.printPage) [data-admin-content]) {
+    width: 210mm !important;
+    height: 297mm !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    overflow: hidden !important;
+    background: white !important;
+  }
   .screenBar { display: none !important; }
   .document { padding: 0; background: white; }
   .sheet { position: relative; width: 210mm; min-height: 0; height: 297mm; margin: 0; padding: 0; box-shadow: none; overflow: hidden; break-after: auto; page-break-after: auto; }
   .plan { position: absolute; top: 50%; left: 50%; width: 297mm; height: 193mm; margin: 0; border: 0; transform: translate(-50%, -50%) rotate(90deg); transform-origin: center; }
+  .screenName { display: none; }
+  .printName { display: block; }
 }
 
 @media (max-width: 700px) {

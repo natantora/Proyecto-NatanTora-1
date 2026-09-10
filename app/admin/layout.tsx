@@ -134,9 +134,9 @@ export default async function AdminLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div data-admin-layout className="min-h-screen bg-cream">
       {/* Editorial top bar */}
-      <div className="bg-navy-deep text-cream border-b border-navy-soft">
+      <div data-admin-toolbar className="bg-navy-deep text-cream border-b border-navy-soft">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex items-center gap-5">
             <Link
@@ -172,8 +172,8 @@ export default async function AdminLayout({
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 py-6 sm:py-8 lg:py-14 grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-6 lg:gap-16">
-        <details className="lg:hidden border border-line bg-cream-light group">
+      <div data-admin-shell className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 py-6 sm:py-8 lg:py-14 grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-6 lg:gap-16">
+        <details data-admin-mobile-nav className="lg:hidden border border-line bg-cream-light group">
           <summary className="list-none cursor-pointer px-4 py-3.5 flex items-center justify-between gap-4 text-[11px] tracking-[0.2em] uppercase font-bold text-navy">
             <span>Menú de administración</span>
             <span className="text-gold-deep text-lg leading-none group-open:rotate-45 transition-transform">+</span>
@@ -198,7 +198,7 @@ export default async function AdminLayout({
           </nav>
         </details>
 
-        <aside className="hidden lg:block lg:sticky lg:top-10 lg:self-start">
+        <aside data-admin-sidebar className="hidden lg:block lg:sticky lg:top-10 lg:self-start">
           <div className="eyebrow text-gold mb-5">Secciones</div>
           <nav className="flex flex-col gap-1">
             {nav
@@ -219,7 +219,7 @@ export default async function AdminLayout({
               ))}
           </nav>
         </aside>
-        <div className="min-w-0">{children}</div>
+        <div data-admin-content className="min-w-0">{children}</div>
       </div>
     </div>
   );

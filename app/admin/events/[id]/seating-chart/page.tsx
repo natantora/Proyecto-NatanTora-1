@@ -47,7 +47,7 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
   const occupied = seats.filter((seat) => seat.status === "occupied" || seat.holder_name).sort(compareSeats);
   const region: Region = { name: "Vista general", viewBox: [0, 0, CANVAS_W, CANVAS_H] };
 
-  return <main>
+  return <main className={styles.printPage}>
     <div className={styles.screenBar}>
       <Link href={`/admin/events/${id}`} className={styles.backLink}>← Volver al evento</Link>
       <PrintButton />
@@ -82,7 +82,14 @@ function ReservedSeatMarker({ seat }: { seat: PrintSeat }) {
   const lineHeight = fontSize * .92;
   const firstLineY = seatY - ((lines.length - 1) * lineHeight) / 2;
   const clipId = `seat-name-${seat.id}`;
-  return <g transform={`rotate(${readableAngle(seat.rotation)} ${seatX} ${seatY})`}>
+  const printX = seatX;
+  const printY = seatY - 20;
+  const printFontSize = planPrintNameFontSize(lines);
+  const printLineHeight = printFontSize * .92;
+  const printFirstLineY = printY - ((lines.length - 1) * printLineHeight) / 2;
+  const printClipId = `print-seat-name-${seat.id}`;
+  return <>
+  <g className={styles.screenName} transform={`rotate(${readableAngle(seat.rotation)} ${seatX} ${seatY})`}>
     <defs><clipPath id={clipId}><rect x={seatX - 9} y={seatY - 8} width={18} height={16} rx={1.5} /></clipPath></defs>
     <text
       x={seatX}
@@ -99,7 +106,26 @@ function ReservedSeatMarker({ seat }: { seat: PrintSeat }) {
       paintOrder="stroke"
       clipPath={`url(#${clipId})`}
     >{lines.map((line, index) => <tspan key={`${seat.id}-${index}`} x={seatX} y={firstLineY + index * lineHeight}>{line}</tspan>)}</text>
-  </g>;
+  </g>
+  <g className={styles.printName} transform={`rotate(${readableAngle(seat.rotation)} ${printX} ${printY})`}>
+    <defs><clipPath id={printClipId}><rect x={printX - 13} y={printY - 10} width={26} height={20} rx={1.5} /></clipPath></defs>
+    <text
+      x={printX}
+      y={printFirstLineY}
+      textAnchor="middle"
+      dominantBaseline="middle"
+      fontFamily="Arial Narrow, Arial, sans-serif"
+      fontSize={printFontSize}
+      fontWeight="800"
+      letterSpacing="0"
+      fill="#071a35"
+      stroke="#ffffff"
+      strokeWidth={.8}
+      paintOrder="stroke"
+      clipPath={`url(#${printClipId})`}
+    >{lines.map((line, index) => <tspan key={`print-${seat.id}-${index}`} x={printX} y={printFirstLineY + index * printLineHeight}>{line}</tspan>)}</text>
+  </g>
+  </>;
 }
 
 const PRINT_NAME_OVERRIDES: Record<string, string[]> = {
@@ -158,6 +184,13 @@ function planNameFontSize(lines: string[]): number {
   const fitWidth = 17.5 / (longestLine * .45);
   const fitHeight = 14 / (lines.length * .92);
   return Math.min(5.2, fitWidth, fitHeight);
+}
+
+function planPrintNameFontSize(lines: string[]): number {
+  const longestLine = Math.max(...lines.map((line) => line.length), 1);
+  const fitWidth = 25 / (longestLine * .45);
+  const fitHeight = 18 / (lines.length * .92);
+  return Math.min(7.2, fitWidth, fitHeight);
 }
 
 function readableAngle(value: number): number {
