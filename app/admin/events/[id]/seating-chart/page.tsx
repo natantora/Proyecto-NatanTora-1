@@ -70,7 +70,7 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
             <div className={styles.pageName}>{region.name}<br />Hoja {index + 1} de {regions.length}</div>
           </header>
           <SeatChart event={event} seats={seats} occupied={regionSeats} tables={venueTables} region={region} overview={index === 0} />
-          <div className={styles.legend}><span className={styles.legendItem}><span className={styles.dot} /> Asiento reservado</span><span>El número dentro de cada marca corresponde al nombre completo de la lista inferior.</span></div>
+          <div className={styles.legend}><span className={styles.legendItem}><span className={styles.dot} /> Asiento reservado</span><span>Los nombres aparecen directamente junto a cada lugar, siguiendo la orientación de la fila. La lista inferior conserva el nombre completo.</span></div>
           <h2 className={styles.listTitle}>{index === 0 ? `Resumen · ${occupied.length} lugares ocupados` : `Personas en esta zona · ${regionSeats.length}`}</h2>
           {regionSeats.length ? <div className={styles.roster}>{regionSeats.sort(compareSeats).map((seat) => <div className={styles.rosterItem} key={seat.id}><span className={styles.seatCode}>{seat.row_label}</span><span className={styles.personName}>{seat.holder_name || "Ocupado"}</span>{seat.reservation_status === "pending" ? <span className={styles.pending}>Pendiente</span> : null}</div>)}</div> : <p className={styles.empty}>No hay lugares reservados en esta zona.</p>}
         </section>;
@@ -92,12 +92,48 @@ function SeatChart({ event, seats, occupied, tables, region, overview }: { event
 function ReservedSeatMarker({ seat, overview }: { seat: PrintSeat; overview: boolean }) {
   if (seat.x === null || seat.y === null) return null;
   if (overview) return <circle cx={seat.x} cy={seat.y} r={3.4} fill="#9f252b" stroke="#68151a" strokeWidth={1} />;
-  const code = seat.row_label;
-  const width = Math.max(13, code.length * 4.6 + 5);
+
+  // The reference plans place each name directly beside its chair, without a
+  // callout box. Rotating the label perpendicular to the chair keeps dense
+  // rows legible and mirrors the way names are typeset on the 2025 plan.
+  const labelAngle = readableAngle(seat.rotation + 90);
+  const offsetAngle = ((seat.rotation + 90) * Math.PI) / 180;
+  const labelX = seat.x + Math.cos(offsetAngle) * 7.5;
+  const labelY = seat.y + Math.sin(offsetAngle) * 7.5;
+  const name = compactPlanName(seat.holder_name || "Ocupado");
   return <g>
-    <rect x={seat.x - width / 2} y={seat.y - 5.5} width={width} height={11} rx={3} fill="#9f252b" stroke="#68151a" strokeWidth={1} />
-    <text x={seat.x} y={seat.y + .4} textAnchor="middle" dominantBaseline="middle" fontFamily="Arial, sans-serif" fontSize="5.8" fontWeight="700" fill="#ffffff">{code}</text>
+    <circle cx={seat.x} cy={seat.y} r={3.5} fill="#9f252b" stroke="#68151a" strokeWidth={.9} />
+    <line x1={seat.x} y1={seat.y} x2={labelX} y2={labelY} stroke="#a8a39a" strokeWidth={.65} />
+    <text
+      x={labelX}
+      y={labelY}
+      transform={`rotate(${labelAngle} ${labelX} ${labelY})`}
+      textAnchor="start"
+      dominantBaseline="middle"
+      fontFamily="Arial, sans-serif"
+      fontSize="4.6"
+      fontWeight="500"
+      letterSpacing=".12"
+      fill="#585f68"
+    >{name}</text>
   </g>;
+}
+
+function compactPlanName(value: string): string {
+  const normalized = value.trim().replace(/\s+/g, " ").toLocaleUpperCase("es-MX");
+  if (normalized.length <= 22) return normalized;
+  const parts = normalized.split(" ");
+  if (parts.length > 1) {
+    const firstAndLast = `${parts[0]} ${parts[parts.length - 1]}`;
+    if (firstAndLast.length <= 22) return firstAndLast;
+  }
+  return `${normalized.slice(0, 21).trimEnd()}…`;
+}
+
+function readableAngle(value: number): number {
+  let angle = ((value % 360) + 360) % 360;
+  if (angle > 90 && angle <= 270) angle -= 180;
+  return angle;
 }
 
 function Furniture({ tables }: { tables: VenueTable[] }) {
