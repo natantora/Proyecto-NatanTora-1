@@ -6,9 +6,9 @@ import { CircleDollarSign, Gift, Loader2, MousePointer2, Printer, Save, User } f
 import type { VenueTable } from "@/lib/venue-layout";
 import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
-type SeatingMode = "none" | "open" | "assigned";
+type SeatingMode = "none" | "open" | "assigned" | "general";
 type Seat = { id: string; row_label: string; seat_number: number; status: "available" | "occupied"; x: number | null; y: number | null; rotation: number; price: string | number | null };
-type Reservation = { id: string; seat_id: string | null; holder_name: string; holder_email: string; holder_phone: string | null; created_at: string };
+type Reservation = { id: string; seat_id: string | null; holder_name: string; holder_email: string; holder_phone: string | null; created_at: string; payment_id: string | null; status: "pending" | "confirmed"; unit_price: string | number };
 type SelectionMode = "inspect" | "price" | "courtesy";
 
 export default function EventSeatsAdmin({ eventId, seatingMode, planType, capacity, defaultSeatPrice, seats, reservations, reservationCount, venueTables, canViewReservations }: {
@@ -47,12 +47,12 @@ export default function EventSeatsAdmin({ eventId, seatingMode, planType, capaci
     return <div className="rounded-xl border border-midrash-100 bg-white p-6 text-sm text-midrash-600">Este evento no tiene reservaciones.</div>;
   }
 
-  if (seatingMode === "open") {
+  if (seatingMode === "open" || seatingMode === "general") {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-midrash-700"><strong>{reservationCount}</strong> de <strong>{capacity ?? 0}</strong> lugares reservados.</p>
+        <p className="text-sm text-midrash-700">{seatingMode === "general" ? <><strong>{reservationCount}</strong> entradas registradas.</> : <><strong>{reservationCount}</strong> de <strong>{capacity ?? 0}</strong> lugares reservados.</>}</p>
         {canViewReservations ? (
-          <ReservationsTable reservations={reservations} showSeat={false} />
+          seatingMode === "general" ? <GeneralAdmissionTable reservations={reservations} /> : <ReservationsTable reservations={reservations} showSeat={false} />
         ) : (
           <PrivacyNotice />
         )}
@@ -268,6 +268,22 @@ function ReservationsTable({ reservations, showSeat, seats }: { reservations: Re
       </table>
     </div>
   );
+}
+
+function GeneralAdmissionTable({ reservations }: { reservations: Reservation[] }) {
+  if (reservations.length === 0) return <p className="rounded-xl border border-dashed border-midrash-200 p-4 text-xs text-midrash-500">Todavía no hay compras.</p>;
+  const purchases = [...reservations.reduce((groups, reservation) => {
+    const key = reservation.payment_id || reservation.id;
+    const current = groups.get(key);
+    if (current) {
+      current.quantity += 1;
+      current.total += Number(reservation.unit_price);
+    } else {
+      groups.set(key, { ...reservation, quantity: 1, total: Number(reservation.unit_price) });
+    }
+    return groups;
+  }, new Map<string, Reservation & { quantity: number; total: number }>()).values()];
+  return <div className="overflow-x-auto rounded-xl border border-midrash-100 bg-white"><table className="w-full min-w-[720px] divide-y divide-midrash-100 text-sm"><thead className="bg-midrash-50"><tr><th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-midrash-600">Comprador</th><th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-midrash-600">Contacto</th><th className="px-3 py-2 text-center text-[11px] font-semibold uppercase text-midrash-600">Personas</th><th className="px-3 py-2 text-right text-[11px] font-semibold uppercase text-midrash-600">Total</th><th className="px-3 py-2 text-left text-[11px] font-semibold uppercase text-midrash-600">Estado</th></tr></thead><tbody className="divide-y divide-midrash-100">{purchases.map((purchase) => <tr key={purchase.payment_id || purchase.id}><td className="px-3 py-3 font-medium text-navy">{purchase.holder_name}</td><td className="px-3 py-3 text-midrash-600">{purchase.holder_email}{purchase.holder_phone ? ` · ${purchase.holder_phone}` : ""}</td><td className="px-3 py-3 text-center font-bold text-navy">{purchase.quantity}</td><td className="px-3 py-3 text-right font-bold text-navy">${purchase.total.toLocaleString("es-MX")} MXN</td><td className="px-3 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${purchase.status === "confirmed" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{purchase.status === "confirmed" ? "Pagado" : "Pago pendiente"}</span></td></tr>)}</tbody></table></div>;
 }
 
 function PrivacyNotice() {

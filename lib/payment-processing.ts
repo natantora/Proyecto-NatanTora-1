@@ -96,10 +96,10 @@ export async function finalizeCheckoutSession(session: Stripe.Checkout.Session):
       const rows = await client.query<{
         email: string; member_name: string; event_id: string; event_title: string; event_date: Date;
         location: string | null; row_label: string | null; seat_number: number | null; x: number | null;
-        unit_price: string;
+        unit_price: string; seating_mode: string;
       }>(
         `SELECT reservation.holder_email AS email, reservation.holder_name AS member_name,
-                event.id AS event_id, event.title AS event_title, event.event_date, event.location,
+                event.id AS event_id, event.title AS event_title, event.event_date, event.location, event.seating_mode,
                 seat.row_label, seat.seat_number, seat.x, reservation.unit_price::text
            FROM event_reservations reservation
            JOIN events event ON event.id = reservation.event_id
@@ -117,7 +117,7 @@ export async function finalizeCheckoutSession(session: Stripe.Checkout.Session):
         eventTitle: first.event_title,
         eventDate: first.event_date,
         location: first.location || "Midrash Natán Torá",
-        seats: rows.rows.map((row) => row.row_label ? (row.x !== null ? row.row_label : `${row.row_label}${row.seat_number ?? ""}`) : "Lugar libre"),
+        seats: rows.rows.map((row) => row.row_label ? (row.x !== null ? row.row_label : `${row.row_label}${row.seat_number ?? ""}`) : row.seating_mode === "general" ? "Entrada general" : "Lugar libre"),
         quantity: rows.rows.length,
         total: rows.rows.reduce((sum, row) => sum + Number(row.unit_price), 0),
       };

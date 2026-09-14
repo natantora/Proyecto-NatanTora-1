@@ -6,7 +6,7 @@ import { getVenueLayout } from "@/lib/venue-layout";
 import { ARCHITECTURAL_SEATS } from "@/lib/architectural-seat-map";
 import { renumberSeatsByVisualOrder } from "@/lib/seat-numbering";
 
-type SeatingMode = "none" | "open" | "assigned";
+type SeatingMode = "none" | "open" | "assigned" | "general";
 type SeatPlanType = "architectural" | "custom";
 
 async function isAuthorized() {
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const eventDate = new Date(body.event_date);
-  const seatingMode: SeatingMode = ["none", "open", "assigned"].includes(body.seating_mode)
+  const seatingMode: SeatingMode = ["none", "open", "assigned", "general"].includes(body.seating_mode)
     ? body.seating_mode
     : "none";
   const seatPlanType: SeatPlanType = body.seat_plan_type === "custom" ? "custom" : "architectural";
@@ -41,6 +41,9 @@ export async function POST(req: NextRequest) {
   }
   if (seatingMode !== "none" && seatPrice === null) {
     return NextResponse.json({ error: "El precio por asiento debe ser un importe válido" }, { status: 400 });
+  }
+  if (seatingMode === "general" && (!seatPrice || seatPrice <= 0)) {
+    return NextResponse.json({ error: "La entrada general debe tener un precio mayor a cero" }, { status: 400 });
   }
 
   let capacity: number | null = null;
@@ -164,10 +167,10 @@ export async function PATCH(req: NextRequest) {
     const seatPrice = money(body.seat_price);
     if (seatPrice === null) return NextResponse.json({ error: "El precio debe ser un importe válido" }, { status: 400 });
     const result = await query(
-      "UPDATE events SET seat_price = $2 WHERE id = $1 AND seating_mode <> 'none' RETURNING *",
+      "UPDATE events SET seat_price = $2 WHERE id = $1 AND seating_mode <> 'none' AND (seating_mode <> 'general' OR $2::numeric > 0) RETURNING *",
       [body.id, seatPrice],
     );
-    if (!result.rows[0]) return NextResponse.json({ error: "Evento no encontrado o sin reservaciones" }, { status: 404 });
+    if (!result.rows[0]) return NextResponse.json({ error: "Evento no encontrado o precio inválido. La entrada general debe costar más de cero." }, { status: 404 });
     return NextResponse.json({ ok: true, event: result.rows[0] });
   }
 

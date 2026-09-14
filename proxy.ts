@@ -17,6 +17,9 @@ function isPublic(pathname: string): boolean {
   if (pathname.startsWith("/api/")) return true;
   if (pathname.startsWith("/auth/")) return true;
   if (pathname.startsWith("/approve/")) return true;
+  // La agenda es pública. Cada detalle decide si admite invitados; los
+  // eventos de entrada general permiten comprar sin crear una cuenta.
+  if (pathname === "/eventos" || pathname.startsWith("/eventos/")) return true;
   return false;
 }
 

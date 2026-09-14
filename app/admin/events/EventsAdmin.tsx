@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Plus, Trash2, Loader2, X, Users, Armchair, Send, LockKeyhole, UnlockKeyhole } from "lucide-react";
 import { formatMXN } from "@/lib/utils";
 
-type SeatingMode = "none" | "open" | "assigned";
+type SeatingMode = "none" | "open" | "assigned" | "general";
 type SeatPlanType = "architectural" | "custom";
 type EventRow = {
   id: string;
@@ -137,9 +137,10 @@ export default function EventsAdmin({ initial, architecturalSeatCount, customSea
 
               <fieldset>
                 <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-midrash-600">Tipo de acceso</legend>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     ["none", "Sin reservación", "Solo se publica el evento."],
+                    ["general", "Entrada general", "Sin lugares. Se paga por una o varias personas, incluso sin cuenta."],
                     ["open", "Lugar libre", "Se controla el cupo, sin asignar asiento."],
                     ["assigned", "Con plano", "Cada persona elige su asiento."],
                   ].map(([value, title, description]) => (
@@ -163,6 +164,16 @@ export default function EventsAdmin({ initial, architecturalSeatCount, customSea
                     Precio por lugar (MXN)
                     <input required min={0} max={1000000} step="0.01" type="number" className="input mt-1.5 bg-white normal-case" placeholder="Ej. 500" value={form.seat_price} onChange={(e) => setForm({ ...form, seat_price: e.target.value })} />
                     <span className="mt-2 block normal-case font-normal">Escribe 0 si es gratuito.</span>
+                  </label>
+                </div>
+              ) : null}
+
+              {form.seating_mode === "general" ? (
+                <div className="rounded-xl border border-midrash-100 bg-midrash-50 p-4">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-midrash-600">
+                    Precio por persona (MXN)
+                    <input required min={0.01} max={1000000} step="0.01" type="number" className="input mt-1.5 bg-white normal-case" placeholder="Ej. 500" value={form.seat_price} onChange={(e) => setForm({ ...form, seat_price: e.target.value })} />
+                    <span className="mt-2 block normal-case font-normal">Cada comprador podrá elegir cuántas personas pagará. No necesitará registrarse ni iniciar sesión.</span>
                   </label>
                 </div>
               ) : null}
@@ -256,6 +267,8 @@ export default function EventsAdmin({ initial, architecturalSeatCount, customSea
                 <td className="px-4 py-3 text-sm">
                   {event.seating_mode === "open" ? (
                     <div className="space-y-1"><span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800"><Users className="h-3.5 w-3.5" /> Lugar libre · {event.capacity}</span><div className="text-xs text-midrash-500">{Number(event.seat_price) > 0 ? `${formatMXN(Number(event.seat_price))} por lugar` : "Gratuito"}</div></div>
+                  ) : event.seating_mode === "general" ? (
+                    <div className="space-y-1"><span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-800"><Users className="h-3.5 w-3.5" /> Entrada general · sin lugares</span><div className="text-xs text-midrash-500">{formatMXN(Number(event.seat_price))} por persona · admite invitados</div></div>
                   ) : event.seating_mode === "assigned" ? (
                     <div className="space-y-1"><span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"><Armchair className="h-3.5 w-3.5" /> {event.seat_plan_type === "custom" ? "Plano personalizado" : "Plano original"} · {event.capacity}</span><div className="text-xs text-midrash-500">{Number(event.seat_price) > 0 ? `${formatMXN(Number(event.seat_price))} por asiento` : "Gratuito"}</div></div>
                   ) : (

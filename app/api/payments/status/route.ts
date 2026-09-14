@@ -12,7 +12,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Demasiadas consultas" }, { status: 429 });
   }
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const sessionId = req.nextUrl.searchParams.get("session_id")?.trim() || "";
   const internalPaymentId = req.nextUrl.searchParams.get("internal_payment_id")?.trim() || "";
   const providerPaymentId = req.nextUrl.searchParams.get("provider_payment_id")?.trim() || "";
@@ -24,7 +23,13 @@ export async function GET(req: NextRequest) {
     [sessionId || internalPaymentId],
   );
   if (!payment.rows[0]) return NextResponse.json({ error: "Pago no encontrado" }, { status: 404 });
-  if (payment.rows[0].user_id !== user.id) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  if (payment.rows[0].user_id) {
+    if (!user || payment.rows[0].user_id !== user.id) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  } else {
+    const eventId = typeof payment.rows[0].metadata?.event_id === "string" ? payment.rows[0].metadata.event_id : "";
+    const guestEvent = eventId ? await query<{ id: string }>("SELECT id FROM events WHERE id = $1 AND seating_mode = 'general' LIMIT 1", [eventId]) : null;
+    if (payment.rows[0].metadata?.kind !== "event" || !guestEvent?.rows[0]) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
   let status = payment.rows[0].status;
   if (!["paid", "refunded", "charged_back"].includes(status) && internalPaymentId && mercadoPagoConfigured() && (providerPaymentId || payment.rows[0].mercadopago_payment_id)) {
     try {

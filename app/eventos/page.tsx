@@ -15,7 +15,7 @@ type EventRow = {
   description: string | null;
   event_date: string;
   location: string | null;
-  seating_mode: "none" | "open" | "assigned";
+  seating_mode: "none" | "open" | "assigned" | "general";
   capacity: number | null;
   reservations_open: boolean;
   seat_price: number | string;
@@ -71,8 +71,8 @@ export default async function Eventos() {
             Agenda de la <span className="accent-light">comunidad.</span>
           </h1>
           <p className="mt-5 text-[17px] text-cream/75 max-w-2xl">
-            Inscríbete o muestra interés. Miembros registrados tienen prioridad
-            en eventos de fiestas mayores y acceso al plano de asientos.
+            Consulta los próximos encuentros. Algunos eventos permiten comprar
+            entradas sin registro y otros incluyen reservación de lugar.
           </p>
         </div>
       </section>
@@ -108,6 +108,8 @@ export default async function Eventos() {
                     ? event.reservations_open ? "Elegir lugar" : "Próximamente"
                     : event.seating_mode === "open"
                       ? event.reservations_open ? "Reservar" : "Próximamente"
+                      : event.seating_mode === "general"
+                        ? event.reservations_open ? "Comprar entradas" : "Próximamente"
                       : "Ver evento";
                   return (
                     <li
@@ -136,8 +138,7 @@ export default async function Eventos() {
                         ) : null}
                         {event.seating_mode !== "none" ? (
                           <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/55">
-                            {event.seating_mode === "assigned" ? "Selección en plano" : "Lugar libre"} · {event.capacity} lugares
-                            {event.seating_mode === "assigned" ? " · Precios según asiento" : Number(event.seat_price) > 0 ? ` · $${Number(event.seat_price).toLocaleString("es-MX")} MXN` : " · Gratuito"}
+                            {event.seating_mode === "assigned" ? <>Selección en plano · {event.capacity} lugares · Precios según asiento</> : event.seating_mode === "open" ? <>Lugar libre · {event.capacity} lugares{Number(event.seat_price) > 0 ? ` · $${Number(event.seat_price).toLocaleString("es-MX")} MXN` : " · Gratuito"}</> : <>Entrada general · ${Number(event.seat_price).toLocaleString("es-MX")} MXN por persona · Sin registro</>}
                           </p>
                         ) : null}
                       </div>
@@ -145,10 +146,10 @@ export default async function Eventos() {
                         <span className="cursor-not-allowed whitespace-nowrap border border-cream/20 px-5 py-3 text-[11px] uppercase tracking-[0.2em] text-cream/40">{action}</span>
                       ) : (
                         <Link
-                          href={isLoggedIn ? `/eventos/${event.id}` : "/auth/login"}
+                          href={isLoggedIn || event.seating_mode === "general" ? `/eventos/${event.id}` : `/auth/login?next=${encodeURIComponent(`/eventos/${event.id}`)}`}
                           className="text-[11px] tracking-[0.2em] uppercase text-gold-light border border-gold/40 px-5 py-3 hover:bg-gold hover:text-navy-deep hover:border-gold transition-colors whitespace-nowrap"
                         >
-                          {isLoggedIn ? action : "Inscribirme"}
+                          {isLoggedIn || event.seating_mode === "general" ? action : "Inscribirme"}
                         </Link>
                       )}
                     </li>

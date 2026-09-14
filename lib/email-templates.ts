@@ -257,7 +257,8 @@ export function memberDecisionEmail(p: MemberDecisionEmailParams): string {
 }
 
 export function reservationConfirmationEmail(p: ReservationEmailParams): string {
-  const seatText = p.seats.length ? p.seats.join(", ") : "Lugar libre (sin asiento asignado)";
+  const generalAdmission = p.seats.length > 0 && p.seats.every((seat) => seat === "Entrada general");
+  const seatText = generalAdmission ? `${p.quantity} ${p.quantity === 1 ? "entrada general" : "entradas generales"}` : p.seats.length ? p.seats.join(", ") : "Lugar libre (sin asiento asignado)";
   return transactionalEmail({
     preview: `Reservación confirmada para ${p.eventTitle}`,
     eyebrow: "Reservación confirmada",
@@ -266,7 +267,7 @@ export function reservationConfirmationEmail(p: ReservationEmailParams): string 
     details: [
       ["Fecha", formatEventDate(p.eventDate)],
       ["Lugar", p.location],
-      [p.quantity === 1 ? "Asiento" : "Asientos", seatText],
+      [generalAdmission ? "Entradas" : p.quantity === 1 ? "Asiento" : "Asientos", seatText],
       ["Cantidad", String(p.quantity)],
       ["Importe", p.total > 0 ? formatMoney(p.total) : "Gratuito"],
     ],

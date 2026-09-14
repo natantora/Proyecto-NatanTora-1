@@ -171,7 +171,7 @@ export async function finalizeMercadoPagoPayment(paymentId: string, providerPaym
       if (seatIds.length) await client.query("UPDATE event_seats SET status = 'occupied' WHERE id = ANY($1::uuid[])", [seatIds]);
       await recordFinancialAudit(client, { action: "payment.approved", entityType: "payment", entityId: paymentId, metadata: { provider: "mercadopago", kind: "event" } });
       const first = rows.rows[0];
-      return { state: "confirmed" as const, email: first.email, memberName: first.member_name, eventId: first.event_id, eventTitle: first.event_title, eventDate: first.event_date, location: first.location || "Midrash Natán Torá", seats: rows.rows.map((row) => row.row_label ? (row.x !== null ? row.row_label : `${row.row_label}${row.seat_number || ""}`) : "Lugar libre"), quantity: rows.rows.length, total: rows.rows.reduce((sum, row) => sum + Number(row.unit_price), 0) };
+      return { state: "confirmed" as const, email: first.email, memberName: first.member_name, eventId: first.event_id, eventTitle: first.event_title, eventDate: first.event_date, location: first.location || "Midrash Natán Torá", seats: rows.rows.map((row) => row.row_label ? (row.x !== null ? row.row_label : `${row.row_label}${row.seat_number || ""}`) : event?.rows[0]?.seating_mode === "general" ? "Entrada general" : "Lugar libre"), quantity: rows.rows.length, total: rows.rows.reduce((sum, row) => sum + Number(row.unit_price), 0) };
     });
     if (result.state === "conflict" || result.state === "missing") {
       await reportSystemAlert({

@@ -213,10 +213,9 @@ UPDATE events SET published_at = COALESCE(published_at, created_at) WHERE publis
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'events_seating_mode_check') THEN
-    ALTER TABLE events ADD CONSTRAINT events_seating_mode_check
-      CHECK (seating_mode IN ('none', 'open', 'assigned'));
-  END IF;
+  ALTER TABLE events DROP CONSTRAINT IF EXISTS events_seating_mode_check;
+  ALTER TABLE events ADD CONSTRAINT events_seating_mode_check
+    CHECK (seating_mode IN ('none', 'open', 'assigned', 'general'));
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'events_capacity_check') THEN
     ALTER TABLE events ADD CONSTRAINT events_capacity_check
       CHECK (capacity IS NULL OR capacity > 0);
@@ -352,6 +351,8 @@ CREATE TABLE IF NOT EXISTS event_reservations (
 );
 CREATE INDEX IF NOT EXISTS idx_event_reservations_event ON event_reservations(event_id, created_at);
 ALTER TABLE event_reservations ADD COLUMN IF NOT EXISTS unit_price NUMERIC(10,2) NOT NULL DEFAULT 0;
+-- Las entradas generales pueden comprarse como invitado, sin crear una cuenta.
+ALTER TABLE event_reservations ALTER COLUMN user_id DROP NOT NULL;
 
 -- Una misma persona puede apartar varios asientos en una sola reservación.
 -- La unicidad por asiento se conserva para impedir dobles reservaciones.

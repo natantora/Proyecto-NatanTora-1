@@ -10,10 +10,11 @@ type Seat = { id: string; row_label: string; seat_number: number; status: "avail
 type Reservation = { id: string; seat_id: string | null; row_label: string | null; seat_number: number | null; x: number | null; unit_price: string | number };
 type PendingPayment = { id: string; expires_at: string; seats: string[] };
 
-export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, pendingPayment: initialPendingPayment, reservedCount, paymentResult, sessionId, internalPaymentId, providerPaymentId, cancelledPaymentId }: {
-  eventId: string; mode: "none" | "open" | "assigned"; planType: SeatPlanType; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
+export default function EventReservationClient({ eventId, mode, planType, capacity, seatPrice, reservationsOpen, seats: initialSeats, venueTables, existingReservations, pendingPayment: initialPendingPayment, reservedCount, paymentResult, sessionId, internalPaymentId, providerPaymentId, cancelledPaymentId, currentUser }: {
+  eventId: string; mode: "none" | "open" | "assigned" | "general"; planType: SeatPlanType; capacity: number | null; seats: Seat[]; venueTables: VenueTable[];
   seatPrice: number; reservationsOpen: boolean; existingReservations: Reservation[]; pendingPayment: PendingPayment | null; reservedCount: number;
   paymentResult: "success" | "cancelled" | null; sessionId: string | null; internalPaymentId: string | null; providerPaymentId: string | null; cancelledPaymentId: string | null;
+  currentUser: { name: string; email: string; phone: string } | null;
 }) {
   const router = useRouter();
   const [seats, setSeats] = useState(initialSeats);
@@ -25,9 +26,14 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   const [pendingPayment, setPendingPayment] = useState(initialPendingPayment);
   const [cancellingPending, setCancellingPending] = useState(false);
   const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [holderName, setHolderName] = useState(currentUser?.name || "");
+  const [holderEmail, setHolderEmail] = useState(currentUser?.email || "");
+  const [holderPhone, setHolderPhone] = useState(currentUser?.phone || "");
+  const [checkoutConfirmed, setCheckoutConfirmed] = useState(false);
   const selectedTotal = mode === "assigned"
     ? seats.filter((seat) => selectedIds.includes(seat.id)).reduce((sum, seat) => sum + Number(seat.price ?? seatPrice), 0)
-    : seatPrice;
+    : mode === "general" ? seatPrice * quantity : seatPrice;
   const paymentRequired = selectedTotal > 0;
   const hasMap = seats.length > 0 && seats.every((seat) => seat.x !== null && seat.y !== null);
   const rows = useMemo(() => {
@@ -38,6 +44,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
 
   useEffect(() => {
     if (paymentResult === "cancelled" && cancelledPaymentId) {
+      if (mode === "general") return;
       void fetch(`/api/events/${eventId}/reserve`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payment_id: cancelledPaymentId }) })
         .finally(() => { router.replace(`/eventos/${eventId}`); router.refresh(); });
       return;
@@ -52,11 +59,14 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
       if (providerPaymentId) params.set("provider_payment_id", providerPaymentId);
       const response = await fetch(`/api/payments/status?${params}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
-      if (payload.status === "paid") { router.replace(`/eventos/${eventId}`); router.refresh(); }
+      if (payload.status === "paid") {
+        if (mode === "general") setCheckoutConfirmed(true);
+        else { router.replace(`/eventos/${eventId}`); router.refresh(); }
+      }
       else if (attempts < 7) window.setTimeout(check, 1200);
     };
     void check();
-  }, [cancelledPaymentId, eventId, internalPaymentId, paymentResult, providerPaymentId, router, sessionId]);
+  }, [cancelledPaymentId, eventId, internalPaymentId, mode, paymentResult, providerPaymentId, router, sessionId]);
 
   useEffect(() => {
     const refreshAfterCheckout = (event: PageTransitionEvent) => { if (event.persisted) router.refresh(); };
@@ -83,9 +93,11 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
 
   async function reserve() {
     if (paymentRequired && !policyAccepted) { setError("Confirma la política de compra antes de continuar."); return; }
+    if (mode === "general" && holderName.trim().length < 2) { setError("Escribe el nombre completo del comprador."); return; }
+    if (mode === "general" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(holderEmail.trim())) { setError("Escribe un correo electrónico válido."); return; }
     setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds, policyAccepted } : { policyAccepted }) });
+      const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds, policyAccepted } : mode === "general" ? { quantity, holderName, holderEmail, holderPhone, policyAccepted } : { policyAccepted }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
       if (body.requiresPayment && body.url) { window.location.href = body.url; return; }
@@ -107,8 +119,9 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   }
 
   if (mode === "none") return <div className="border border-line bg-cream-light p-6 text-sm text-ink-soft">Este evento no requiere reservar lugar.</div>;
+  if (checkoutConfirmed) return <div className="border border-green-200 bg-green-50 p-7 text-center"><CheckCircle2 className="mx-auto h-10 w-10 text-green-700" /><h2 className="mt-4 font-serif text-2xl font-bold text-navy">Pago confirmado</h2><p className="mt-2 text-sm text-ink-soft">Tus entradas quedaron registradas. Enviamos la confirmación al correo del comprador.</p></div>;
   if (paymentResult === "success") return <div className="border border-green-200 bg-green-50 p-7 text-center"><Loader2 className="mx-auto h-9 w-9 animate-spin text-green-700" /><h2 className="mt-4 font-serif text-2xl font-bold text-navy">Confirmando tu pago</h2><p className="mt-2 text-sm text-ink-soft">No cierres esta página. Tus lugares quedarán confirmados en unos segundos.</p></div>;
-  if (paymentResult === "cancelled") return <div className="border border-amber-200 bg-amber-50 p-7 text-center"><h2 className="font-serif text-2xl font-bold text-navy">Pago cancelado</h2><p className="mt-2 text-sm text-ink-soft">No se realizó ningún cargo. Estamos liberando los lugares seleccionados.</p></div>;
+  if (paymentResult === "cancelled") return <div className="border border-amber-200 bg-amber-50 p-7 text-center"><h2 className="font-serif text-2xl font-bold text-navy">Pago no completado</h2><p className="mt-2 text-sm text-ink-soft">{mode === "general" ? "No se registraron entradas. Si Mercado Pago no realizó el cobro, puedes volver a intentarlo." : "No se realizó ningún cargo. Estamos liberando los lugares seleccionados."}</p>{mode === "general" ? <button type="button" onClick={() => { router.replace(`/eventos/${eventId}`); router.refresh(); }} className="btn-primary mt-5">Volver a intentar</button> : null}</div>;
   if (reservations.length > 0) return (
     <div className="border border-gold/40 bg-gold/10 p-7 text-center">
       <CheckCircle2 className="mx-auto h-10 w-10 text-gold-deep" />
@@ -137,6 +150,22 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
       <p className="mt-2 text-sm text-ink-soft">El evento ya está publicado, pero el administrador todavía no ha abierto la selección de lugares.</p>
     </div>
   );
+
+  if (mode === "general") {
+    return <div className="border border-line bg-cream-light p-6 sm:p-8">
+      <div className="flex items-start gap-4"><Users className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Compra tus entradas</h2><p className="mt-2 text-sm leading-relaxed text-ink-soft">No hay lugares asignados y no necesitas crear una cuenta. Elige cuántas personas asistirán y realiza un solo pago.</p></div></div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Nombre completo<input required value={holderName} onChange={(event) => setHolderName(event.target.value)} maxLength={120} className="input mt-2 bg-white normal-case" autoComplete="name" /></label>
+        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Correo electrónico<input required type="email" value={holderEmail} onChange={(event) => setHolderEmail(event.target.value)} maxLength={254} className="input mt-2 bg-white normal-case" autoComplete="email" /></label>
+        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Teléfono (opcional)<input value={holderPhone} onChange={(event) => setHolderPhone(event.target.value)} maxLength={40} className="input mt-2 bg-white normal-case" autoComplete="tel" /></label>
+        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Número de personas<input required type="number" min={1} max={50} value={quantity} onChange={(event) => setQuantity(Math.min(50, Math.max(1, Number(event.target.value) || 1)))} className="input mt-2 bg-white normal-case" /></label>
+      </div>
+      <div className="mt-6 flex items-end justify-between gap-4 border-y border-line py-5"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">{quantity} {quantity === 1 ? "persona" : "personas"}</p><p className="mt-1 text-sm text-ink-soft">${seatPrice.toLocaleString("es-MX")} MXN por persona</p></div><p className="font-serif text-3xl font-bold text-navy">${selectedTotal.toLocaleString("es-MX")} <span className="text-sm">MXN</span></p></div>
+      <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} generalAdmission />
+      {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
+      <button onClick={reserve} disabled={loading || !policyAccepted} className="btn-primary mt-6 w-full justify-center sm:w-auto">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : `Pagar ${quantity} ${quantity === 1 ? "entrada" : "entradas"}`}</button>
+    </div>;
+  }
 
   if (mode === "open") {
     const remaining = Math.max((capacity ?? 0) - count, 0);
@@ -202,9 +231,9 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   </div>;
 }
 
-function PurchasePolicy({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
+function PurchasePolicy({ checked, onChange, generalAdmission = false }: { checked: boolean; onChange: (value: boolean) => void; generalAdmission?: boolean }) {
   return <label className="mt-5 flex cursor-pointer items-start gap-3 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
     <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-[#BD9040]" />
-    <span><strong className="block text-navy">Política de compra y asignación de lugar</strong><span className="mt-1 block text-xs leading-relaxed">Entiendo que, una vez confirmado el pago, la reservación y los asientos elegidos son definitivos. No se permiten cancelaciones, cambios ni reembolsos.</span></span>
+    <span><strong className="block text-navy">{generalAdmission ? "Política de compra" : "Política de compra y asignación de lugar"}</strong><span className="mt-1 block text-xs leading-relaxed">{generalAdmission ? "Entiendo que, una vez confirmado el pago, las entradas son definitivas. No se permiten cancelaciones ni reembolsos." : "Entiendo que, una vez confirmado el pago, la reservación y los asientos elegidos son definitivos. No se permiten cancelaciones, cambios ni reembolsos."}</span></span>
   </label>;
 }
