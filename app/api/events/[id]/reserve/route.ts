@@ -136,7 +136,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (useMercadoPago) {
         const preference = await createMercadoPagoPreference({ paymentId: result.paymentId, title: result.event.title, description: result.event.seating_mode === "general" ? `${result.quantity} ${result.quantity === 1 ? "entrada" : "entradas"} de acceso general` : result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre", amount: result.total, email: result.holderEmail, kind: "event", returnPath: `/eventos/${eventId}`, expirationMinutes: 30 });
         await query("UPDATE payments SET mercadopago_preference_id = $2, provider_status = 'pending', provider_updated_at = NOW(), updated_at = NOW() WHERE id = $1", [result.paymentId, preference.id]);
-        return NextResponse.json({ ok: true, requiresPayment: true, url: preference.url, provider: "mercadopago" });
+        return NextResponse.json({ ok: true, requiresPayment: true, url: preference.url, paymentId: result.paymentId, provider: "mercadopago" });
       }
       const commonMetadata = { payment_id: result.paymentId, payment_kind: "event", event_id: eventId, ...(user?.id ? { user_id: user.id } : {}) };
       const session = await stripeClient().checkout.sessions.create({
@@ -151,7 +151,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       }, { idempotencyKey: result.paymentId });
       if (!session.url) throw new Error("CHECKOUT_FAILED");
       await query("UPDATE payments SET stripe_session_id = $2, updated_at = NOW() WHERE id = $1", [result.paymentId, session.id]);
-      return NextResponse.json({ ok: true, requiresPayment: true, url: session.url, provider: "stripe" });
+      return NextResponse.json({ ok: true, requiresPayment: true, url: session.url, paymentId: result.paymentId, provider: "stripe" });
     }
 
     if (result.holderEmail) await sendReservationConfirmation({ email: result.holderEmail, memberName: guestName || user?.full_name || user?.email || "Invitado", eventId, eventTitle: result.event.title, eventDate: result.event.event_date, location: result.event.location || "Midrash Natán Torá", seats: result.event.seating_mode === "general" ? Array(result.quantity).fill("Entrada general") : result.labels, quantity: result.quantity, total: 0 }).catch((error) => console.error("[events/reserve] confirmation email failed:", error));

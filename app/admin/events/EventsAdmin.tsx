@@ -140,7 +140,7 @@ export default function EventsAdmin({ initial, architecturalSeatCount, customSea
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     ["none", "Sin reservación", "Solo se publica el evento."],
-                    ["general", "Entrada general", "Sin lugares. Se paga por una o varias personas, incluso sin cuenta."],
+                    ["general", "Entrada general", "Se paga por una o varias personas, sin asignar lugares."],
                     ["open", "Lugar libre", "Se controla el cupo, sin asignar asiento."],
                     ["assigned", "Con plano", "Cada persona elige su asiento."],
                   ].map(([value, title, description]) => (
@@ -268,7 +268,7 @@ export default function EventsAdmin({ initial, architecturalSeatCount, customSea
                   {event.seating_mode === "open" ? (
                     <div className="space-y-1"><span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800"><Users className="h-3.5 w-3.5" /> Lugar libre · {event.capacity}</span><div className="text-xs text-midrash-500">{Number(event.seat_price) > 0 ? `${formatMXN(Number(event.seat_price))} por lugar` : "Gratuito"}</div></div>
                   ) : event.seating_mode === "general" ? (
-                    <div className="space-y-1"><span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-800"><Users className="h-3.5 w-3.5" /> Entrada general · sin lugares</span><div className="text-xs text-midrash-500">{formatMXN(Number(event.seat_price))} por persona · admite invitados</div></div>
+                    <div className="space-y-1"><span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-800"><Users className="h-3.5 w-3.5" /> Entrada general</span><div className="text-xs text-midrash-500">{formatMXN(Number(event.seat_price))} por persona</div></div>
                   ) : event.seating_mode === "assigned" ? (
                     <div className="space-y-1"><span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"><Armchair className="h-3.5 w-3.5" /> {event.seat_plan_type === "custom" ? "Plano personalizado" : "Plano original"} · {event.capacity}</span><div className="text-xs text-midrash-500">{Number(event.seat_price) > 0 ? `${formatMXN(Number(event.seat_price))} por asiento` : "Gratuito"}</div></div>
                   ) : (

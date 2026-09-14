@@ -71,8 +71,7 @@ export default async function Eventos() {
             Agenda de la <span className="accent-light">comunidad.</span>
           </h1>
           <p className="mt-5 text-[17px] text-cream/75 max-w-2xl">
-            Consulta los próximos encuentros. Algunos eventos permiten comprar
-            entradas sin registro y otros incluyen reservación de lugar.
+            Consulta los próximos encuentros, compra tus entradas o reserva tu lugar.
           </p>
         </div>
       </section>
@@ -138,7 +137,7 @@ export default async function Eventos() {
                         ) : null}
                         {event.seating_mode !== "none" ? (
                           <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/55">
-                            {event.seating_mode === "assigned" ? <>Selección en plano · {event.capacity} lugares · Precios según asiento</> : event.seating_mode === "open" ? <>Lugar libre · {event.capacity} lugares{Number(event.seat_price) > 0 ? ` · $${Number(event.seat_price).toLocaleString("es-MX")} MXN` : " · Gratuito"}</> : <>Entrada general · ${Number(event.seat_price).toLocaleString("es-MX")} MXN por persona · Sin registro</>}
+                            {event.seating_mode === "assigned" ? <>Selección en plano · {event.capacity} lugares · Precios según asiento</> : event.seating_mode === "open" ? <>Lugar libre · {event.capacity} lugares{Number(event.seat_price) > 0 ? ` · $${Number(event.seat_price).toLocaleString("es-MX")} MXN` : " · Gratuito"}</> : <>Entrada general · ${Number(event.seat_price).toLocaleString("es-MX")} MXN por persona</>}
                           </p>
                         ) : null}
                       </div>
