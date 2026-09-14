@@ -36,7 +36,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       const requestedQuantity = Number(body.quantity);
       const generalQuantity = event.seating_mode === "general" && Number.isInteger(requestedQuantity) ? requestedQuantity : 1;
       if (event.seating_mode === "general" && (holderName.length < 2 || holderName.length > 120)) throw new Error("NAME_REQUIRED");
-      if (event.seating_mode === "general" && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(holderEmail) || holderEmail.length > 254)) throw new Error("EMAIL_REQUIRED");
+      if (event.seating_mode === "general" && (holderPhone.length < 7 || holderPhone.length > 40)) throw new Error("PHONE_REQUIRED");
+      if (event.seating_mode === "general" && holderEmail && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(holderEmail) || holderEmail.length > 254)) throw new Error("EMAIL_INVALID");
       if (event.seating_mode === "general" && (generalQuantity < 1 || generalQuantity > 50)) throw new Error("QUANTITY_INVALID");
       const defaultUnitPrice = Number(event.seat_price ?? 0);
       if (event.seating_mode === "general" && defaultUnitPrice <= 0) throw new Error("PRICE_REQUIRED");
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
           [eventId],
         );
         if (Number(countResult.rows[0]?.count ?? 0) >= (event.capacity ?? 0)) throw new Error("SOLD_OUT");
-      } else {
+      } else if (event.seating_mode === "assigned") {
         const requestedIds: unknown[] = Array.isArray(body.seatIds) ? body.seatIds : typeof body.seatId === "string" ? [body.seatId] : [];
         const seatIds = [...new Set(requestedIds.filter((seatId): seatId is string => typeof seatId === "string" && seatId.length > 0))].slice(0, 20);
         if (!seatIds.length) throw new Error("SEAT_REQUIRED");
@@ -140,7 +141,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       const commonMetadata = { payment_id: result.paymentId, payment_kind: "event", event_id: eventId, ...(user?.id ? { user_id: user.id } : {}) };
       const session = await stripeClient().checkout.sessions.create({
         mode: "payment",
-        customer_email: guestEmail || user?.email,
+        customer_email: result.holderEmail || undefined,
         line_items: [{ price_data: { currency: "mxn", unit_amount: Math.round((result.event.seating_mode === "general" ? Number(result.event.seat_price) : result.total) * 100), product_data: { name: result.event.title, description: result.event.seating_mode === "general" ? "Entrada general" : result.seats.length ? `Asientos: ${result.labels.join(", ")}` : "Entrada con lugar libre" } }, quantity: result.event.seating_mode === "general" ? result.quantity : 1 }],
         metadata: commonMetadata,
         payment_intent_data: { metadata: commonMetadata },
@@ -153,7 +154,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       return NextResponse.json({ ok: true, requiresPayment: true, url: session.url, provider: "stripe" });
     }
 
-    await sendReservationConfirmation({ email: guestEmail || user?.email || "", memberName: guestName || user?.full_name || user?.email || "Invitado", eventId, eventTitle: result.event.title, eventDate: result.event.event_date, location: result.event.location || "Midrash Natán Torá", seats: result.event.seating_mode === "general" ? Array(result.quantity).fill("Entrada general") : result.labels, quantity: result.quantity, total: 0 }).catch((error) => console.error("[events/reserve] confirmation email failed:", error));
+    if (result.holderEmail) await sendReservationConfirmation({ email: result.holderEmail, memberName: guestName || user?.full_name || user?.email || "Invitado", eventId, eventTitle: result.event.title, eventDate: result.event.event_date, location: result.event.location || "Midrash Natán Torá", seats: result.event.seating_mode === "general" ? Array(result.quantity).fill("Entrada general") : result.labels, quantity: result.quantity, total: 0 }).catch((error) => console.error("[events/reserve] confirmation email failed:", error));
     return NextResponse.json({ ok: true, requiresPayment: false, reservations: result.reservations, seats: result.seats });
   } catch (error) {
     if (pendingPaymentId) await failPendingPayment(pendingPaymentId).catch(() => undefined);
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       SEAT_REQUIRED: ["Selecciona al menos un asiento", 400], SEAT_UNAVAILABLE: ["Uno de esos asientos acaba de ser ocupado. Revisa tu selección.", 409],
       PAYMENTS_UNAVAILABLE: ["El pago de este evento no está disponible por el momento.", 503], CHECKOUT_FAILED: ["No fue posible abrir el pago seguro.", 500],
       POLICY_REQUIRED: ["Debes aceptar la política de compra antes de continuar.", 400],
-      NAME_REQUIRED: ["Escribe el nombre completo del comprador", 400], EMAIL_REQUIRED: ["Escribe un correo electrónico válido", 400],
+      NAME_REQUIRED: ["Escribe el nombre completo del comprador", 400], PHONE_REQUIRED: ["Escribe un teléfono válido", 400], EMAIL_INVALID: ["El correo electrónico no es válido", 400],
       QUANTITY_INVALID: ["Puedes comprar de 1 a 50 entradas por pago", 400], PRICE_REQUIRED: ["Este evento todavía no tiene un precio válido", 409],
     };
     const [text, status] = responses[message] ?? ["No fue posible completar la reservación", 500];

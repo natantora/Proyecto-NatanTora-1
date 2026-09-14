@@ -36,7 +36,7 @@ export async function createMercadoPagoPreference(params: {
   title: string;
   description?: string;
   amount: number;
-  email: string;
+  email?: string;
   kind: "billing" | "donation" | "event";
   returnPath: string;
   expirationMinutes?: number;
@@ -56,7 +56,7 @@ export async function createMercadoPagoPreference(params: {
         currency_id: "MXN",
         unit_price: params.amount,
       }],
-      payer: { email: params.email },
+      ...(params.email ? { payer: { email: params.email } } : {}),
       external_reference: params.paymentId,
       metadata: { payment_id: params.paymentId, payment_kind: params.kind },
       back_urls: {

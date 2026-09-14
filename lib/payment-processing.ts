@@ -122,7 +122,7 @@ export async function finalizeCheckoutSession(session: Stripe.Checkout.Session):
         total: rows.rows.reduce((sum, row) => sum + Number(row.unit_price), 0),
       };
     });
-    if (result) {
+    if (result?.email) {
       await sendReservationConfirmation(result).catch((error) => console.error("[payments] reservation receipt failed:", error));
     }
     return { kind, applied: Boolean(result) };

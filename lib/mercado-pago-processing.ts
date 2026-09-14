@@ -184,7 +184,7 @@ export async function finalizeMercadoPagoPayment(paymentId: string, providerPaym
       });
       return true;
     }
-    if (result.state === "confirmed") { const delivery = await sendReservationConfirmation(result); if (!delivery.ok) await reportEmailFailure("Confirmación de reservación", delivery.error, paymentId); }
+    if (result.state === "confirmed" && result.email) { const delivery = await sendReservationConfirmation(result); if (!delivery.ok) await reportEmailFailure("Confirmación de reservación", delivery.error, paymentId); }
     return result.state === "confirmed" || result.state === "already-paid";
   }
 
