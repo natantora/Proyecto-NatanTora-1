@@ -244,7 +244,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
       <div className="mt-6 flex items-end justify-between gap-4 border-y border-line py-5"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">{quantity} {quantity === 1 ? "persona" : "personas"}</p><p className="mt-1 text-sm text-ink-soft">${seatPrice.toLocaleString("es-MX")} MXN por persona</p></div><p className="font-serif text-3xl font-bold text-navy">${selectedTotal.toLocaleString("es-MX")} <span className="text-sm">MXN</span></p></div>
       <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} generalAdmission />
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
-      <button onClick={reserve} disabled={loading || !policyAccepted} aria-disabled={loading || !policyAccepted || !formReady} className="btn-primary mt-6 w-full justify-center sm:w-auto">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : `Pagar ${quantity} ${quantity === 1 ? "entrada" : "entradas"}`}</button>
+      <button onClick={reserve} disabled={loading || !policyAccepted} aria-disabled={loading || !policyAccepted} data-form-ready={formReady} className="btn-primary mt-6 w-full justify-center sm:w-auto">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : `Pagar ${quantity} ${quantity === 1 ? "entrada" : "entradas"}`}</button>
     </div>;
   }
 
