@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 type ReservationRow = {
   id: string;
   event_id: string;
-  user_id: string;
+  user_id: string | null;
+  payment_id: string | null;
   holder_name: string;
   holder_email: string;
   holder_phone: string | null;
@@ -33,8 +34,9 @@ type ReservationGroup = {
   eventId: string;
   eventTitle: string;
   eventDate: Date;
-  userId: string;
+  userId: string | null;
   name: string;
+  names: string[];
   email: string;
   phone: string | null;
   createdAt: Date;
@@ -51,7 +53,7 @@ export default async function ReservationsAdminPage({ searchParams }: { searchPa
   const params = await searchParams;
 
   const result = await query<ReservationRow>(
-    `SELECT reservation.id, reservation.event_id, reservation.user_id,
+    `SELECT reservation.id, reservation.event_id, reservation.user_id, reservation.payment_id,
             reservation.holder_name, reservation.holder_email, reservation.holder_phone,
             reservation.unit_price, reservation.created_at,
             event.title AS event_title, event.event_date,
@@ -67,7 +69,7 @@ export default async function ReservationsAdminPage({ searchParams }: { searchPa
 
   const groups = new Map<string, ReservationGroup>();
   for (const row of result.rows) {
-    const key = `${row.event_id}:${row.user_id}`;
+    const key = `${row.event_id}:${row.payment_id || row.user_id || row.id}`;
     const current = groups.get(key) ?? {
       key,
       eventId: row.event_id,
@@ -75,6 +77,7 @@ export default async function ReservationsAdminPage({ searchParams }: { searchPa
       eventDate: row.event_date,
       userId: row.user_id,
       name: row.holder_name,
+      names: [],
       email: row.holder_email,
       phone: row.holder_phone,
       createdAt: row.created_at,
@@ -85,13 +88,14 @@ export default async function ReservationsAdminPage({ searchParams }: { searchPa
       paymentStatus: row.payment_status,
     };
     current.quantity += 1;
+    current.names.push(row.holder_name);
     current.total += Number(row.unit_price ?? 0);
     if (row.seat_id) current.seats.push(row.x !== null ? row.row_label ?? "—" : `${row.row_label ?? ""}${row.seat_number ?? ""}`);
     groups.set(key, current);
   }
 
   const q = (params.q ?? "").trim().toLocaleLowerCase("es-MX");
-  const reservations = [...groups.values()].filter((group) => !q || [group.eventTitle, group.name, group.email, group.phone ?? "", group.seats.join(" ")].some((value) => value.toLocaleLowerCase("es-MX").includes(q)));
+  const reservations = [...groups.values()].filter((group) => !q || [group.eventTitle, group.names.join(" "), group.email, group.phone ?? "", group.seats.join(" ")].some((value) => value.toLocaleLowerCase("es-MX").includes(q)));
   const reservedPlaces = reservations.reduce((sum, group) => sum + group.quantity, 0);
   const expectedAmount = reservations.reduce((sum, group) => sum + group.total, 0);
 
@@ -99,11 +103,11 @@ export default async function ReservationsAdminPage({ searchParams }: { searchPa
     <div className="space-y-6">
       <div>
         <h1 className="font-serif text-3xl font-bold text-midrash-900">Reservaciones</h1>
-        <p className="mt-1 text-sm text-midrash-600">Cada fila agrupa todos los asientos reservados por una persona para el mismo evento.</p>
+        <p className="mt-1 text-sm text-midrash-600">Cada fila corresponde a una reservación o a una compra realizada para el mismo evento.</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Stat icon={Users} label="Personas con reserva" value={String(reservations.length)} />
+        <Stat icon={Users} label="Reservaciones y compras" value={String(reservations.length)} />
         <Stat icon={Armchair} label="Lugares reservados" value={String(reservedPlaces)} />
         <Stat icon={WalletCards} label="Importe registrado" value={formatMXN(expectedAmount)} />
       </div>
@@ -133,13 +137,13 @@ export default async function ReservationsAdminPage({ searchParams }: { searchPa
             {reservations.map((group) => (
               <tr key={group.key}>
                 <td className="px-4 py-3"><Link href={`/admin/events/${group.eventId}`} className="font-semibold text-navy hover:text-gold-deep">{group.eventTitle}</Link><div className="mt-0.5 flex items-center gap-1 text-xs text-midrash-500"><CalendarDays className="h-3 w-3" /> {new Date(group.eventDate).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Mexico_City" })}</div></td>
-                <td className="px-4 py-3"><div className="font-medium text-midrash-900">{group.name}</div><div className="break-all text-xs text-midrash-500">{group.email}{group.phone ? ` · ${group.phone}` : ""}</div></td>
+                <td className="px-4 py-3"><div className="space-y-0.5 font-medium text-midrash-900">{(group.seats.length ? [...new Set(group.names)] : group.names).map((name, index, names) => <div key={`${name}-${index}`}>{names.length > 1 ? `${index + 1}. ` : ""}{name}</div>)}</div><div className="mt-1 break-all text-xs text-midrash-500">{group.email}{group.phone ? ` · ${group.phone}` : ""}</div></td>
                 <td className="px-4 py-3 font-semibold text-navy">{group.seats.length ? group.seats.join(", ") : "Lugar libre"}</td>
                 <td className="px-4 py-3 text-center font-semibold">{group.quantity}</td>
                 <td className="px-4 py-3 text-right font-semibold">{group.total > 0 ? formatMXN(group.total) : "Gratuito"}</td>
                 <td className="px-4 py-3 text-midrash-600">{new Date(group.createdAt).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Mexico_City" })}</td>
                 <td className="px-4 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${group.paymentStatus === "paid" ? "bg-green-100 text-green-800" : group.reservationStatus === "pending" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"}`}>{group.paymentStatus === "paid" ? "Pagada · definitiva" : group.reservationStatus === "pending" ? "Esperando pago" : "Confirmada"}</span></td>
-                <td className="px-4 py-3"><ReservationActions eventId={group.eventId} userId={group.userId} eventTitle={group.eventTitle} memberName={group.name} paymentStatus={group.paymentStatus} /></td>
+                <td className="px-4 py-3">{group.userId ? <ReservationActions eventId={group.eventId} userId={group.userId} eventTitle={group.eventTitle} memberName={group.name} paymentStatus={group.paymentStatus} /> : <span className="text-xs text-midrash-400">—</span>}</td>
               </tr>
             ))}
           </tbody>

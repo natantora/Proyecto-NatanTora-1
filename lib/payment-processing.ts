@@ -118,6 +118,7 @@ export async function finalizeCheckoutSession(session: Stripe.Checkout.Session):
         eventDate: first.event_date,
         location: first.location || "Midrash Natán Torá",
         seats: rows.rows.map((row) => row.row_label ? (row.x !== null ? row.row_label : `${row.row_label}${row.seat_number ?? ""}`) : row.seating_mode === "general" ? "Entrada general" : "Lugar libre"),
+        attendeeNames: first.seating_mode === "general" ? rows.rows.map((row) => row.member_name) : undefined,
         quantity: rows.rows.length,
         total: rows.rows.reduce((sum, row) => sum + Number(row.unit_price), 0),
       };

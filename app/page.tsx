@@ -3,6 +3,8 @@ import ShabbatStrip from "@/components/ShabatWidget";
 import DailyZemanim from "@/components/DailyZemanim";
 import { getCurrentUser } from "@/lib/auth";
 
+const KAPAROT_EVENT_URL = "/eventos/ffecacbe-be70-4b64-944f-f386acb40ebb";
+
 export default async function Home() {
   const user = await getCurrentUser();
   const isLoggedIn = !!user;
@@ -62,6 +64,23 @@ export default async function Home() {
               </Link>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="border-y border-gold/30 bg-cream px-6 py-16 lg:px-12 lg:py-20">
+        <div className="mx-auto grid max-w-7xl items-center gap-8 border border-gold/35 bg-cream-light px-7 py-10 sm:px-10 lg:grid-cols-[1fr_auto] lg:px-14 lg:py-12">
+          <div>
+            <div className="eyebrow eyebrow-line mb-5 text-gold">Kaparot 5787</div>
+            <h2 className="font-serif text-4xl font-normal leading-tight text-navy sm:text-5xl">
+              Haz Kaparot con nosotros
+            </h2>
+            <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-ink-soft">
+              Registra a las personas de tu familia y realiza el pago en línea de forma segura.
+            </p>
+          </div>
+          <Link href={KAPAROT_EVENT_URL} className="btn btn-primary w-full justify-center text-center sm:w-auto">
+            Hacer Kaparot
+          </Link>
         </div>
       </section>
 

@@ -34,6 +34,7 @@ type ReservationEmailData = {
   eventDate: Date | string;
   location: string;
   seats: string[];
+  attendeeNames?: string[];
   quantity: number;
   total: number;
 };
@@ -44,7 +45,7 @@ export async function sendReservationConfirmation(params: ReservationEmailData) 
     to: params.email,
     subject: `Reservación confirmada — ${params.eventTitle}`,
     html: reservationConfirmationEmail({ ...params, eventUrl }),
-    text: `Tu reservación para ${params.eventTitle} está confirmada. Fecha: ${new Date(params.eventDate).toLocaleString("es-MX", { timeZone: "America/Mexico_City" })}. ${params.seats.length > 0 && params.seats.every((seat) => seat === "Entrada general") ? `Entradas: ${params.quantity}.` : `Lugares: ${params.seats.join(", ") || "lugar libre"}.`}`,
+    text: `Tu reservación para ${params.eventTitle} está confirmada. Fecha: ${new Date(params.eventDate).toLocaleString("es-MX", { timeZone: "America/Mexico_City" })}. ${params.attendeeNames?.length ? `Personas: ${params.attendeeNames.join(", ")}.` : params.seats.length > 0 && params.seats.every((seat) => seat === "Entrada general") ? `Entradas: ${params.quantity}.` : `Lugares: ${params.seats.join(", ") || "lugar libre"}.`}`,
   });
 }
 

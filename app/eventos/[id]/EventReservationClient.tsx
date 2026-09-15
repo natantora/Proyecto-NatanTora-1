@@ -27,7 +27,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   const [cancellingPending, setCancellingPending] = useState(false);
   const [policyAccepted, setPolicyAccepted] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [holderName, setHolderName] = useState(currentUser?.name || "");
+  const [attendeeNames, setAttendeeNames] = useState([currentUser?.name || ""]);
   const [holderEmail, setHolderEmail] = useState(currentUser?.email || "");
   const [holderPhone, setHolderPhone] = useState(currentUser?.phone || "");
   const [checkoutConfirmed, setCheckoutConfirmed] = useState(false);
@@ -129,12 +129,13 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
 
   async function reserve() {
     if (paymentRequired && !policyAccepted) { setError("Confirma la política de compra antes de continuar."); return; }
-    if (mode === "general" && holderName.trim().length < 2) { setError("Escribe el nombre completo del comprador."); return; }
+    const normalizedAttendeeNames = attendeeNames.slice(0, quantity).map((name) => name.trim());
+    if (mode === "general" && (normalizedAttendeeNames.length !== quantity || normalizedAttendeeNames.some((name) => name.length < 2))) { setError(`Escribe el nombre de ${quantity === 1 ? "la persona" : "cada persona"}.`); return; }
     if (mode === "general" && holderPhone.trim().length < 7) { setError("Escribe un teléfono válido."); return; }
     if (mode === "general" && holderEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(holderEmail.trim())) { setError("El correo electrónico no es válido."); return; }
     setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds, policyAccepted } : mode === "general" ? { quantity, holderName, holderEmail, holderPhone, policyAccepted } : { policyAccepted }) });
+      const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds, policyAccepted } : mode === "general" ? { quantity, attendeeNames: normalizedAttendeeNames, holderName: normalizedAttendeeNames[0], holderEmail, holderPhone, policyAccepted } : { policyAccepted }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
       if (body.requiresPayment && body.url) {
@@ -197,10 +198,15 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
     return <div className="border border-line bg-cream-light p-6 sm:p-8">
       <div className="flex items-start gap-4"><Users className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Compra tus entradas</h2><p className="mt-2 text-sm leading-relaxed text-ink-soft">Elige cuántas personas asistirán y realiza un solo pago.</p></div></div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Nombre completo<input required value={holderName} onChange={(event) => setHolderName(event.target.value)} maxLength={120} className="input mt-2 bg-white normal-case" autoComplete="name" /></label>
         <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Teléfono<input required type="tel" value={holderPhone} onChange={(event) => setHolderPhone(event.target.value)} minLength={7} maxLength={40} className="input mt-2 bg-white normal-case" autoComplete="tel" inputMode="tel" /></label>
         <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Correo electrónico (opcional)<input type="email" value={holderEmail} onChange={(event) => setHolderEmail(event.target.value)} maxLength={254} className="input mt-2 bg-white normal-case" autoComplete="email" /></label>
-        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Número de personas<input required type="number" min={1} max={50} value={quantity} onChange={(event) => setQuantity(Math.min(50, Math.max(1, Number(event.target.value) || 1)))} className="input mt-2 bg-white normal-case" /></label>
+        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft sm:col-span-2">Número de personas<input required type="number" min={1} max={50} value={quantity} onChange={(event) => { const nextQuantity = Math.min(50, Math.max(1, Number(event.target.value) || 1)); setQuantity(nextQuantity); setAttendeeNames((current) => Array.from({ length: nextQuantity }, (_, index) => current[index] ?? "")); }} className="input mt-2 bg-white normal-case" /></label>
+        <div className="sm:col-span-2">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">{quantity === 1 ? "Nombre de la persona" : "Nombres de las personas"}</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {attendeeNames.slice(0, quantity).map((name, index) => <label key={index} className="text-xs font-semibold text-ink-soft">Persona {index + 1}<input required value={name} onChange={(event) => setAttendeeNames((current) => current.map((currentName, currentIndex) => currentIndex === index ? event.target.value : currentName))} maxLength={120} className="input mt-1.5 bg-white normal-case" autoComplete={index === 0 ? "name" : "off"} /></label>)}
+          </div>
+        </div>
       </div>
       <div className="mt-6 flex items-end justify-between gap-4 border-y border-line py-5"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">{quantity} {quantity === 1 ? "persona" : "personas"}</p><p className="mt-1 text-sm text-ink-soft">${seatPrice.toLocaleString("es-MX")} MXN por persona</p></div><p className="font-serif text-3xl font-bold text-navy">${selectedTotal.toLocaleString("es-MX")} <span className="text-sm">MXN</span></p></div>
       <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} generalAdmission />

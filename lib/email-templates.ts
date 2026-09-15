@@ -174,6 +174,7 @@ type ReservationEmailParams = {
   eventDate: Date | string;
   location: string;
   seats: string[];
+  attendeeNames?: string[];
   quantity: number;
   total: number;
   eventUrl: string;
@@ -268,6 +269,7 @@ export function reservationConfirmationEmail(p: ReservationEmailParams): string 
       ["Fecha", formatEventDate(p.eventDate)],
       ["Lugar", p.location],
       [generalAdmission ? "Entradas" : p.quantity === 1 ? "Asiento" : "Asientos", seatText],
+      ...(p.attendeeNames?.length ? [["Personas", p.attendeeNames.join(", ")]] as [string, string][] : []),
       ["Cantidad", String(p.quantity)],
       ["Importe", p.total > 0 ? formatMoney(p.total) : "Gratuito"],
     ],
