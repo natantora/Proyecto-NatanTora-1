@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Armchair, CheckCircle2, Loader2, Users } from "lucide-react";
+import { AlertTriangle, Armchair, CheckCircle2, Loader2, Minus, Plus, Users } from "lucide-react";
 import type { VenueTable } from "@/lib/venue-layout";
 import InteractiveSeatPlan, { type SeatPlanType } from "@/components/InteractiveSeatPlan";
 
@@ -34,6 +34,7 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   const [trackedPaymentId, setTrackedPaymentId] = useState(internalPaymentId);
   const [checkoutState, setCheckoutState] = useState<"idle" | "checking" | "pending" | "failed">(paymentResult ? "checking" : "idle");
   const [checkVersion, setCheckVersion] = useState(0);
+  const checkoutStarting = useRef(false);
   const selectedTotal = mode === "assigned"
     ? seats.filter((seat) => selectedIds.includes(seat.id)).reduce((sum, seat) => sum + Number(seat.price ?? seatPrice), 0)
     : mode === "general" ? seatPrice * quantity : seatPrice;
@@ -128,16 +129,25 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   }
 
   async function reserve() {
+    if (checkoutStarting.current) return;
     if (paymentRequired && !policyAccepted) { setError("Confirma la política de compra antes de continuar."); return; }
     const normalizedAttendeeNames = attendeeNames.slice(0, quantity).map((name) => name.trim());
-    if (mode === "general" && (normalizedAttendeeNames.length !== quantity || normalizedAttendeeNames.some((name) => name.length < 2))) { setError(`Escribe el nombre de ${quantity === 1 ? "la persona" : "cada persona"}.`); return; }
-    if (mode === "general" && holderPhone.trim().length < 7) { setError("Escribe un teléfono válido."); return; }
+    const missingNameIndex = normalizedAttendeeNames.findIndex((name) => name.length < 2);
+    if (mode === "general" && (normalizedAttendeeNames.length !== quantity || missingNameIndex >= 0)) {
+      const firstMissing = missingNameIndex >= 0 ? missingNameIndex : normalizedAttendeeNames.length;
+      setError(`Escribe el nombre de la persona ${firstMissing + 1}.`);
+      window.requestAnimationFrame(() => document.getElementById(`attendee-name-${firstMissing}`)?.focus());
+      return;
+    }
+    const phoneDigits = holderPhone.replace(/\D/g, "");
+    if (mode === "general" && (phoneDigits.length < 8 || phoneDigits.length > 15)) { setError("Escribe un teléfono válido de 8 a 15 dígitos."); return; }
     if (mode === "general" && holderEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(holderEmail.trim())) { setError("El correo electrónico no es válido."); return; }
+    checkoutStarting.current = true;
     setLoading(true); setError("");
     try {
       const response = await fetch(`/api/events/${eventId}/reserve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mode === "assigned" ? { seatIds: selectedIds, policyAccepted } : mode === "general" ? { quantity, attendeeNames: normalizedAttendeeNames, holderName: normalizedAttendeeNames[0], holderEmail, holderPhone, policyAccepted } : { policyAccepted }) });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "No fue posible iniciar el pago. Inténtalo nuevamente.");
       if (body.requiresPayment && body.url) {
         if (mode === "general" && body.paymentId) window.localStorage.setItem(`event-payment:${eventId}`, body.paymentId);
         window.location.href = body.url;
@@ -157,7 +167,17 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
         setSeats((current) => current.map((seat) => reservedIds.has(seat.id) ? { ...seat, status: "occupied" } : seat));
       }
     } catch (caught) { setError(caught instanceof Error ? caught.message : "No fue posible reservar"); }
-    finally { setLoading(false); }
+    finally { checkoutStarting.current = false; setLoading(false); }
+  }
+
+  function changeQuantity(nextValue: number) {
+    const nextQuantity = Math.min(50, Math.max(1, Math.round(nextValue)));
+    setQuantity(nextQuantity);
+    setAttendeeNames((current) => {
+      if (current.length >= nextQuantity) return current;
+      return [...current, ...Array.from({ length: nextQuantity - current.length }, () => "")];
+    });
+    setError("");
   }
 
   if (mode === "none") return <div className="border border-line bg-cream-light p-6 text-sm text-ink-soft">Este evento no requiere reservar lugar.</div>;
@@ -195,23 +215,36 @@ export default function EventReservationClient({ eventId, mode, planType, capaci
   );
 
   if (mode === "general") {
+    const completedNames = attendeeNames.slice(0, quantity).filter((name) => name.trim().length >= 2).length;
+    const formReady = completedNames === quantity && holderPhone.replace(/\D/g, "").length >= 8 && holderPhone.replace(/\D/g, "").length <= 15;
     return <div className="border border-line bg-cream-light p-6 sm:p-8">
       <div className="flex items-start gap-4"><Users className="mt-1 h-7 w-7 shrink-0 text-gold-deep" /><div><h2 className="font-serif text-2xl font-bold text-navy">Compra tus entradas</h2><p className="mt-2 text-sm leading-relaxed text-ink-soft">Elige cuántas personas asistirán y realiza un solo pago.</p></div></div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Teléfono<input required type="tel" value={holderPhone} onChange={(event) => setHolderPhone(event.target.value)} minLength={7} maxLength={40} className="input mt-2 bg-white normal-case" autoComplete="tel" inputMode="tel" /></label>
+        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Teléfono<input required type="tel" value={holderPhone} onChange={(event) => { setHolderPhone(event.target.value); setError(""); }} minLength={8} maxLength={40} className="input mt-2 bg-white normal-case" autoComplete="tel" inputMode="tel" placeholder="Ej. 55 1234 5678" /></label>
         <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">Correo electrónico (opcional)<input type="email" value={holderEmail} onChange={(event) => setHolderEmail(event.target.value)} maxLength={254} className="input mt-2 bg-white normal-case" autoComplete="email" /></label>
-        <label className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft sm:col-span-2">Número de personas<input required type="number" min={1} max={50} value={quantity} onChange={(event) => { const nextQuantity = Math.min(50, Math.max(1, Number(event.target.value) || 1)); setQuantity(nextQuantity); setAttendeeNames((current) => Array.from({ length: nextQuantity }, (_, index) => current[index] ?? "")); }} className="input mt-2 bg-white normal-case" /></label>
+        <fieldset className="sm:col-span-2">
+          <legend className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">¿Por cuántas personas vas a pagar?</legend>
+          <div className="mt-3 flex items-stretch justify-center overflow-hidden border border-line bg-white sm:justify-start">
+            <button type="button" onClick={() => changeQuantity(quantity - 1)} disabled={quantity === 1} aria-label="Quitar una persona" className="flex min-h-14 w-16 items-center justify-center text-navy transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-30"><Minus className="h-5 w-5" /></button>
+            <div className="flex min-w-32 flex-1 flex-col items-center justify-center border-x border-line px-5 py-2 sm:max-w-44" aria-live="polite"><strong className="font-serif text-3xl leading-none text-navy">{quantity}</strong><span className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">{quantity === 1 ? "persona" : "personas"}</span></div>
+            <button type="button" onClick={() => changeQuantity(quantity + 1)} disabled={quantity === 50} aria-label="Agregar una persona" className="flex min-h-14 w-16 items-center justify-center text-navy transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-30"><Plus className="h-5 w-5" /></button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2" aria-label="Cantidades rápidas">
+            {[1, 2, 5, 10, 15, 20].map((amount) => <button key={amount} type="button" onClick={() => changeQuantity(amount)} aria-pressed={quantity === amount} className={`min-h-10 min-w-12 border px-3 text-xs font-bold transition-colors ${quantity === amount ? "border-gold bg-gold text-navy" : "border-line bg-white text-ink-soft hover:border-gold"}`}>{amount}</button>)}
+          </div>
+        </fieldset>
         <div className="sm:col-span-2">
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">{quantity === 1 ? "Nombre de la persona" : "Nombres de las personas"}</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {attendeeNames.slice(0, quantity).map((name, index) => <label key={index} className="text-xs font-semibold text-ink-soft">Persona {index + 1}<input required value={name} onChange={(event) => setAttendeeNames((current) => current.map((currentName, currentIndex) => currentIndex === index ? event.target.value : currentName))} maxLength={120} className="input mt-1.5 bg-white normal-case" autoComplete={index === 0 ? "name" : "off"} /></label>)}
+          <div className="flex items-end justify-between gap-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-ink-soft">{quantity === 1 ? "Nombre de la persona" : "Nombres de las personas"}</p><p className={`text-xs font-semibold ${completedNames === quantity ? "text-green-700" : "text-ink-muted"}`}>{completedNames} de {quantity} completos</p></div>
+          <div className="mt-2 h-1 overflow-hidden bg-line"><div className="h-full bg-gold transition-[width]" style={{ width: `${(completedNames / quantity) * 100}%` }} /></div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {attendeeNames.slice(0, quantity).map((name, index) => <label key={index} className="border border-line bg-white p-3 text-xs font-semibold text-ink-soft"><span className="inline-flex h-6 min-w-6 items-center justify-center bg-navy px-1.5 text-[11px] font-bold text-white">{index + 1}</span><span className="ml-2">Nombre completo</span><input id={`attendee-name-${index}`} required value={name} onChange={(event) => { setAttendeeNames((current) => current.map((currentName, currentIndex) => currentIndex === index ? event.target.value : currentName)); setError(""); }} maxLength={120} className="input mt-2 bg-white normal-case" autoComplete={index === 0 ? "name" : "off"} placeholder={`Persona ${index + 1}`} /></label>)}
           </div>
         </div>
       </div>
       <div className="mt-6 flex items-end justify-between gap-4 border-y border-line py-5"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">{quantity} {quantity === 1 ? "persona" : "personas"}</p><p className="mt-1 text-sm text-ink-soft">${seatPrice.toLocaleString("es-MX")} MXN por persona</p></div><p className="font-serif text-3xl font-bold text-navy">${selectedTotal.toLocaleString("es-MX")} <span className="text-sm">MXN</span></p></div>
       <PurchasePolicy checked={policyAccepted} onChange={setPolicyAccepted} generalAdmission />
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
-      <button onClick={reserve} disabled={loading || !policyAccepted} className="btn-primary mt-6 w-full justify-center sm:w-auto">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : `Pagar ${quantity} ${quantity === 1 ? "entrada" : "entradas"}`}</button>
+      <button onClick={reserve} disabled={loading || !policyAccepted} aria-disabled={loading || !policyAccepted || !formReady} className="btn-primary mt-6 w-full justify-center sm:w-auto">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : `Pagar ${quantity} ${quantity === 1 ? "entrada" : "entradas"}`}</button>
     </div>;
   }
 

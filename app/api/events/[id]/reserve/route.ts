@@ -42,7 +42,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       const holderEmail = event.seating_mode === "general" ? guestEmail : user?.email || "";
       const holderPhone = event.seating_mode === "general" ? guestPhone || user?.phone || null : user?.phone || null;
       if (event.seating_mode === "general" && (attendeeNames.length !== generalQuantity || attendeeNames.some((name) => name.length < 2 || name.length > 120))) throw new Error("ATTENDEE_NAMES_REQUIRED");
-      if (event.seating_mode === "general" && (holderPhone.length < 7 || holderPhone.length > 40)) throw new Error("PHONE_REQUIRED");
+      const holderPhoneDigits = holderPhone.replace(/\D/g, "");
+      if (event.seating_mode === "general" && (holderPhoneDigits.length < 8 || holderPhoneDigits.length > 15 || holderPhone.length > 40)) throw new Error("PHONE_REQUIRED");
       if (event.seating_mode === "general" && holderEmail && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(holderEmail) || holderEmail.length > 254)) throw new Error("EMAIL_INVALID");
       if (event.seating_mode === "general" && (generalQuantity < 1 || generalQuantity > 50)) throw new Error("QUANTITY_INVALID");
       const defaultUnitPrice = Number(event.seat_price ?? 0);
@@ -173,7 +174,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       SEAT_REQUIRED: ["Selecciona al menos un asiento", 400], SEAT_UNAVAILABLE: ["Uno de esos asientos acaba de ser ocupado. Revisa tu selección.", 409],
       PAYMENTS_UNAVAILABLE: ["El pago de este evento no está disponible por el momento.", 503], CHECKOUT_FAILED: ["No fue posible abrir el pago seguro.", 500],
       POLICY_REQUIRED: ["Debes aceptar la política de compra antes de continuar.", 400],
-      ATTENDEE_NAMES_REQUIRED: ["Escribe el nombre de cada persona", 400], PHONE_REQUIRED: ["Escribe un teléfono válido", 400], EMAIL_INVALID: ["El correo electrónico no es válido", 400],
+      ATTENDEE_NAMES_REQUIRED: ["Escribe el nombre de cada persona", 400], PHONE_REQUIRED: ["Escribe un teléfono válido de 8 a 15 dígitos", 400], EMAIL_INVALID: ["El correo electrónico no es válido", 400],
       QUANTITY_INVALID: ["Puedes comprar de 1 a 50 entradas por pago", 400], PRICE_REQUIRED: ["Este evento todavía no tiene un precio válido", 409],
     };
     const [text, status] = responses[message] ?? ["No fue posible completar la reservación", 500];

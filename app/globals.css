@@ -416,3 +416,31 @@ body {
   outline: 2px solid var(--gold);
   outline-offset: 3px;
 }
+
+/* The seating chart opts into a clean, plan-only print layout. These selectors
+   live in the global sheet because they intentionally target layout ancestors. */
+@media print {
+  body.seat-plan-printing > header,
+  body.seat-plan-printing > footer,
+  body.seat-plan-printing [data-admin-toolbar],
+  body.seat-plan-printing [data-admin-mobile-nav],
+  body.seat-plan-printing [data-admin-sidebar] {
+    display: none !important;
+  }
+
+  body.seat-plan-printing,
+  body.seat-plan-printing > main,
+  body.seat-plan-printing [data-admin-layout],
+  body.seat-plan-printing [data-admin-shell],
+  body.seat-plan-printing [data-admin-content] {
+    width: 210mm !important;
+    height: 297mm !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    overflow: hidden !important;
+    background: white !important;
+  }
+}

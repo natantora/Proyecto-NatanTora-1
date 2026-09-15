@@ -50,16 +50,6 @@
 
 @media print {
   @page { size: A4 portrait; margin: 0; }
-  :global(body.seat-plan-printing > header),
-  :global(body.seat-plan-printing > footer),
-  :global(body.seat-plan-printing [data-admin-toolbar]),
-  :global(body.seat-plan-printing [data-admin-mobile-nav]),
-  :global(body.seat-plan-printing [data-admin-sidebar]) { display: none !important; }
-  :global(body.seat-plan-printing),
-  :global(body.seat-plan-printing > main),
-  :global(body.seat-plan-printing [data-admin-layout]),
-  :global(body.seat-plan-printing [data-admin-shell]),
-  :global(body.seat-plan-printing [data-admin-content]),
   .printPage {
     width: 210mm !important;
     height: 297mm !important;
