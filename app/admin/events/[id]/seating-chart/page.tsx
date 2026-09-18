@@ -50,7 +50,7 @@ export default async function PrintableSeatingChartPage({ params }: { params: Pr
   return <main className={styles.printPage}>
     <div className={styles.screenBar}>
       <Link href={`/admin/events/${id}`} className={styles.backLink}>← Volver al evento</Link>
-      <PrintButton />
+      <PrintButton eventId={id} />
     </div>
     <div className={styles.document}>
       <section className={styles.sheet}>
