@@ -3,8 +3,6 @@ import ShabbatStrip from "@/components/ShabatWidget";
 import DailyZemanim from "@/components/DailyZemanim";
 import { getCurrentUser } from "@/lib/auth";
 
-const KAPAROT_EVENT_URL = "/eventos/ffecacbe-be70-4b64-944f-f386acb40ebb";
-
 export default async function Home() {
   const user = await getCurrentUser();
   const isLoggedIn = !!user;
@@ -48,9 +46,6 @@ export default async function Home() {
             </p>
 
             <div className="mt-10 lg:mt-12 flex flex-col sm:flex-row sm:flex-wrap gap-4">
-              <Link href={KAPAROT_EVENT_URL} className="btn btn-primary text-center">
-                Haz Kaparot con nosotros
-              </Link>
               {isLoggedIn && (
                 <Link href="/eventos" className="btn btn-ghost text-center">
                   Reserva tu lugar
