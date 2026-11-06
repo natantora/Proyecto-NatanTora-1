@@ -16,10 +16,14 @@ function value(...names: string[]): string {
 export function bucketName() { return value("AWS_S3_BUCKET_NAME", "BUCKET_NAME", "BUCKET"); }
 
 export function storageClient() {
+  // Railway: los buckets actuales usan URL virtual-hosted (el bucket va como
+  // subdominio del endpoint). Solo los buckets viejos usan path-style.
+  // Se puede forzar con AWS_S3_URL_STYLE=path en Railway si el bucket es viejo.
+  const urlStyle = (process.env.AWS_S3_URL_STYLE ?? process.env.BUCKET_URL_STYLE ?? "").toLowerCase();
   return new S3Client({
     region: process.env.AWS_DEFAULT_REGION ?? process.env.BUCKET_REGION ?? process.env.REGION ?? "auto",
     endpoint: value("AWS_ENDPOINT_URL", "BUCKET_ENDPOINT", "ENDPOINT"),
-    forcePathStyle: true,
+    forcePathStyle: urlStyle === "path",
     credentials: {
       accessKeyId: value("AWS_ACCESS_KEY_ID", "BUCKET_ACCESS_KEY_ID", "ACCESS_KEY_ID"),
       secretAccessKey: value("AWS_SECRET_ACCESS_KEY", "BUCKET_SECRET_ACCESS_KEY", "SECRET_ACCESS_KEY"),
